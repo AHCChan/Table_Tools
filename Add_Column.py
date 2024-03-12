@@ -360,7 +360,7 @@ def Parse_Command_Line_Input__Add_Column(raw_command_line_input):
     headers = DEFAULT__headers
     additions = []
     path_out = Generate_Default_Output_File_Path_From_File(path_in,
-            FILEMOD__ADDED)
+            FILEMOD__ADDED, True)
     
     # Validate optional inputs (except output path)
     while inputs:
