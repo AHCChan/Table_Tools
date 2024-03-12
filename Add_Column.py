@@ -17,14 +17,14 @@ into column "2", the final outcome will be a blank column in columns 2 and 5.)
 
 USAGE:
     
-    python27 Add_Column.py <input_file> <input_format> [-o <output_file>] [-a
+    python27 Add_Column.py <input_path> <input_format> [-o <output_path>] [-a
             <col_no> <column_header> <body_text>] [-h <header>]
 
 
 
 MANDATORY:
     
-    input_file
+    input_path
         
         The filepath of the input file.
     
