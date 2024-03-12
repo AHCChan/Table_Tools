@@ -225,7 +225,7 @@ def Add_Columns(path_in, delimiter, path_out, additions, headers):
             Whether or not the input file contains headers.
     
     Return a value of 0 if the function runs successfully.
-    Return a value of 1 if there is a problem with the chromsome sizes file.
+    Return a value of 1 if there is a problem.
     
     Add_Columns(str, str, str, list<[int, str, str]>) -> int
     """
