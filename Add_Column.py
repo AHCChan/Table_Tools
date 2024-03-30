@@ -128,7 +128,7 @@ PRINT_METRICS = True
 
 # Minor Configurations #########################################################
 
-FILEMOD__ADDED =   "__ADDED"
+FILEMOD__ADDED = "__ADDED"
 
 
 
