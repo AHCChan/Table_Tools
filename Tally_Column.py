@@ -1,6 +1,6 @@
 HELP_DOC = """
 TALLY COLUMN
-(version 1.0)
+(version 2.0)
 by Angelo Chan
 
 This is a program for tallying the values in a column.
@@ -11,9 +11,10 @@ The results are outputted as a 2-column TSV.
 
 USAGE:
     
-    python27 BED__Postmerge_Uncollapse.py <input_path> <input_format>
-            <column_no> [-o <output_path>] [-s <separator>] [-m C|F|M|P|S|T|U]
-            [-r A|D|N|R]
+    python27 BED__Postmerge_Uncollapse.py <input_file> <input_format>
+            <column_no> [-o <output_file>] [-s <separator>] [-m C|F|M|P|S|T|U]
+            [-r A|D|N|R] [-p <placeholder_file> <placeholder_format>
+            <placeholder_column_no>]
 
 
 
@@ -32,12 +33,12 @@ MANDATORY:
     
     column_no
         
-        The number of column to be tallied. Uses an index-1 system. (The first
-        column is column 1)
+        The number of the column to be tallied. Uses an index-1 system. (The
+        first column is column 1)
 
 OPTIONAL:
     
-    output_path
+    output_file
         
         (DEFAULT path generation available)
         
@@ -80,6 +81,26 @@ OPTIONAL:
             {D}escending
             {N}umerical (Ascending)
             {R}eversed alphabetical
+    
+    placefolder_file
+        
+        (DEFAULT: None)
+        
+        The filepath of the "placeholder" file. This is a table file which
+        contains, in its first column, all values which must be included in the
+        final tally, even if they have a count of 0.
+    
+    input_format
+        
+        The file format of the placeholder file. Acceptable options are:
+            tsv - Tab-separated values
+            csv - Comma-separated values
+            ssv - Space-separated values
+    
+    column_no
+        
+        The number of the column containing the placeholder values. Uses an
+        index-1 system. (The first column is column 1)
 
 
 
@@ -102,9 +123,10 @@ EXAMPLE:
 
 USAGE:
     
-    python27 BED__Postmerge_Uncollapse.py <input_path> <input_format>
-            <column_no> [-o <output_path>] [-s <separator>] [-m C|F|M|P|S|T|U]
-            [-r A|D|N|R]
+    python27 BED__Postmerge_Uncollapse.py <input_file> <input_format>
+            <column_no> [-o <output_file>] [-s <separator>] [-m C|F|M|P|S|T|U]
+            [-r A|D|N|R] [-p <placeholder_file> <placeholder_format>
+            <placeholder_column_no>]
 """
 
 NAME = "Tally_Column.py"
@@ -205,6 +227,10 @@ Please specify one of the following:
 
 
 
+STR__failed_placeholder = """
+ERROR: A problem occured when getting values from the placeholder file.
+"""
+
 STR__no_values = """
 WARNING: No rows or valid values detected in the specified file.
 """
@@ -282,7 +308,8 @@ PRINT.PRINT_METRICS = PRINT_METRICS
 
 # Functions ####################################################################
 
-def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order):
+def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order,
+            path_placeholder, delim_placeholder, col_no_placeholder):
     """
     Generate a series of FASTA files each containing a synthetic chromosome.
     
@@ -328,12 +355,27 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order):
                 2:  Reversed alphabetical (Z-A)
                 3:  Ascending numerical order
                 4:  Descending numerical order
+    @path_placeholder
+            (str - filepath)
+            The filepath of the "placeholder" file. This is a table file which
+            contains, in its first column, all values which must be included in
+            the final tally, even if they have a count of 0.
+    @delim_placeholder
+            (str)
+            The delimiter use by the placeholder file.
+    @col_no_placeholder
+            (int)
+            The index number of the column in the placeholder file to use as a
+            placeholder.
     
     Return a value of 0 if the function runs successfully.
     Return a value of 1 if there is a problem.
     
     Tally_Column(str, str, int, str, str, int) -> int
     """
+    
+    PRINT.printP(STR__tally_begin)
+    
     # Setup reporting
     total_rows = 0
     total_unique = 0
@@ -349,7 +391,14 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order):
     f.Close()
     o = open(path_out, "w")
     
-    PRINT.printP(STR__tally_begin)
+    # Placeholders
+    if path_placeholder:
+        counts = Get_Placeholders(path_placeholder, delim_placeholder,
+                col_no_placeholder)
+        if not counts:
+            PRINT.printE(STR__failed_placeholder)
+            return 1
+            
     
     # Main loop
     f.Open()
@@ -445,7 +494,7 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order):
                 f.Close()
                 o.close()
                 PRINT.printE(STR__unexpected_failure)
-                return 1
+                return 2
     
     # Write
     keys = Get_Keys_Order(counts, order)
@@ -466,6 +515,41 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order):
     return 0
 
 
+
+def Get_Placeholders(path_placeholder, delim_placeholder, col_no_placeholder):
+    """
+    Return a dictionary of empty counts for every value in the first column of
+    [path_palceholder].
+    
+    @path_placeholder
+            (str - filepath)
+            The filepath of the "placeholder" file. This is a table file which
+            contains, in its first column, all values which must be included in
+            the final tally, even if they have a count of 0.
+    @delim_placeholder
+            (str)
+            The delimiter use by the placeholder file.
+    @col_no_placeholder
+            (int)
+            The index number of the column in the placeholder file to use as a
+            placeholder.
+    
+    Get_Keys_Order(str, str, int) -> dict<str:int>
+    """
+    result = {}
+    f = Table_Reader()
+    f.Set_New_Path(path_placeholder)
+    f.Set_Delimiter(delim_placeholder)
+    f.Open()
+    while not f.EOF:
+        f.Read()
+        try:
+            gene = f[col_no_placeholder]
+        except:
+            return {}
+        result[gene] = 0
+    f.Close()
+    return result
 
 def Get_Keys_Order(data, order):
     """
@@ -625,7 +709,7 @@ def Parse_Command_Line_Input__Tally_Column(raw_command_line_input):
         return 1
     col_no = Validate_Int_Positive(col_no_str)
     if valid == 1:
-        PRINT.printE(STR__invalid_table_format.format(f = table_format))
+        PRINT.printE(STR__invalid_table_format.format(f = col_no_str))
         PRINT.printE(STR__use_help)
         return 1
     col_no = col_no - 1
@@ -636,6 +720,9 @@ def Parse_Command_Line_Input__Tally_Column(raw_command_line_input):
     separator = None
     mode = DEFAULT__mode
     order = DEFAULT__order
+    path_placeholder = None
+    delim_placeholder = None
+    col_no_placeholder = 1
     
     # Validate optional inputs (except output path)
     while inputs:
@@ -644,6 +731,10 @@ def Parse_Command_Line_Input__Tally_Column(raw_command_line_input):
         try: # Following arguments
             if arg in ["-o", "-s", "-m", "-r"]:
                 arg2 = inputs.pop(0)
+            elif arg in ["-p"]:
+                arg2 = inputs.pop(0)
+                arg3 = inputs.pop(0)
+                arg4 = inputs.pop(0)
             else: # Invalid
                 arg = Strip_X(arg)
                 PRINT.printE(STR__invalid_argument.format(s = arg))
@@ -663,12 +754,31 @@ def Parse_Command_Line_Input__Tally_Column(raw_command_line_input):
                 PRINT.printE(STR__invalid_mode.format(s = arg2))
                 PRINT.printE(STR__use_help)
                 return 1
-        else: # arg == "-r"
+        elif arg == "-r":
             order = DICT__order.get(arg2, None)
             if not order:
                 PRINT.printE(STR__invalid_order.format(s = arg))
                 PRINT.printE(STR__use_help)
                 return 1
+        else: # arg == "-p"
+            path_placeholder = arg2
+            valid = Validate_Read_Path(path_placeholder)
+            if valid == 1:
+                PRINT.printE(STR__IO_error_read.format(f = path_placeholder))
+                PRINT.printE(STR__use_help)
+                return 1
+            delim_placeholder = Validate_Table_File_Format(arg3)
+            if not delim_placeholder:
+                PRINT.printE(STR__invalid_table_format.format(
+                        f = delim_placeholder))
+                PRINT.printE(STR__use_help)
+                return 1
+            col_no_placeholder = Validate_Int_Positive(arg4)
+            if valid == 1:
+                PRINT.printE(STR__invalid_table_format.format(f = arg4))
+                PRINT.printE(STR__use_help)
+                return 1
+            col_no_placeholder = col_no_placeholder - 1
     
     # Validate output paths
     valid_out = Validate_Write_Path(path_out)
@@ -682,7 +792,7 @@ def Parse_Command_Line_Input__Tally_Column(raw_command_line_input):
     
     # Run program
     exit_state = Tally_Column(path_in, delim, col_no, path_out, separator, mode,
-            order)
+            order, path_placeholder, delim_placeholder, col_no_placeholder)
     
     # Exit
     if exit_state == 0: return 0
