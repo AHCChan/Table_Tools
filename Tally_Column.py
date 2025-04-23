@@ -90,14 +90,14 @@ OPTIONAL:
         contains, in its first column, all values which must be included in the
         final tally, even if they have a count of 0.
     
-    input_format
+    placeholder_format
         
         The file format of the placeholder file. Acceptable options are:
             tsv - Tab-separated values
             csv - Comma-separated values
             ssv - Space-separated values
     
-    column_no
+    placeholder_column_no
         
         The number of the column containing the placeholder values. Uses an
         index-1 system. (The first column is column 1)
