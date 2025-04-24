@@ -641,13 +641,13 @@ def Report_Metrics(rows, unique, counted, value, mode):
     # Calculations
     avg_count = float(value)/unique
     # Strings
-    rows = str(rows)
-    unique = str(unique)
-    counted = str(counted)
-    value = str(value)
+    rows = str(rows) + "   "
+    unique = str(unique) + "   "
+    counted = str(counted) + "   "
+    value = str(value) + "   "
     avg_count = Trim_Percentage_Str(str(avg_count), 2)
     # Strings, non-numerical
-    mode = DICT__mode_str.get(mode)
+    mode = DICT__mode_str.get(mode) + "   "
     # Pad
     max_size = Get_Max_Len([rows, unique, mode, counted, value, avg_count])
     rows = Pad_Str(rows, max_size, " ", 0)
