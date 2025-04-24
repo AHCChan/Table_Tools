@@ -13,6 +13,10 @@ This program runs in Python 2. It will not work properly with Python 3.
 Please ensure you have Python 2 installed on your computer.
 Please ensure you are using the correct version of Python to run this program.
 
+Table_to_Table.py and Join.py are self-contained and don't require any
+additional files. They can be run as-is. All others require supporting files
+which will need to be obtained from other repositories. (See SETUP)
+
 
 
 INSTRUCTIONS (SETUP)
