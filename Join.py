@@ -1009,8 +1009,8 @@ def Report_Metrics(metrics):
     index_l = percent_l.find(".")
     percent_l = percent_l[:index_l+3]
     index_r = percent_r.find(".")
-    percent_r = percent_r[:index_l+3]
-    # Pad
+    percent_r = percent_r[:index_r+3]
+    # Pad 1
     max_size = max([len(lines_o), len(lines_l), len(lines_r), len(columns_a),
             len(columns_l), len(columns_r)])
     lines_o = ((" "*max_size) + lines_o)[-max_size:]
@@ -1019,6 +1019,10 @@ def Report_Metrics(metrics):
     columns_a = ((" "*max_size) + columns_a)[-max_size:]
     columns_l = ((" "*max_size) + columns_l)[-max_size:]
     columns_r = ((" "*max_size) + columns_r)[-max_size:]
+    # Pad 2
+    max_size = max([len(percent_l), len(percent_r)])
+    percent_l = ((" "*max_size) + percent_l)[-max_size:]
+    percent_r = ((" "*max_size) + percent_r)[-max_size:]
     # Print
     printM(STR__metrics_lines.format(A = lines_o, B = lines_l, C = percent_l,
             D = lines_r, E = percent_r, F = columns_a, G = columns_l,
