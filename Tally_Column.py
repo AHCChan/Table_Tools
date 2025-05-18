@@ -1,6 +1,6 @@
 HELP_DOC = """
 TALLY COLUMN
-(version 2.0)
+(version 2.0.1)
 by Angelo Chan
 
 This is a program for tallying the values in a column.
@@ -688,7 +688,6 @@ def Parse_Command_Line_Input__Tally_Column(raw_command_line_input):
     if len(inputs) < 3:
         PRINT.printE(STR__insufficient_inputs)
         PRINT.printE(STR__use_help)
-        return 1
         return 1
     
     # Setup mandatory inputs
