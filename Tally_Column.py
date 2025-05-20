@@ -1,6 +1,6 @@
 HELP_DOC = """
 TALLY COLUMN
-(version 2.0.1)
+(version 2.1.1)
 by Angelo Chan
 
 This is a program for tallying the values in a column.
@@ -11,9 +11,9 @@ The results are outputted as a 2-column TSV.
 
 USAGE:
     
-    python27 BED__Postmerge_Uncollapse.py <input_file> <input_format>
-            <column_no> [-o <output_file>] [-s <separator>] [-m C|F|M|P|S|T|U]
-            [-r A|D|N|R] [-p <placeholder_file> <placeholder_format>
+    python27 Tally_Column.py <input_file> <input_format> <column_no>
+            [-o <output_file>] [-s <separator>] [-m C|F|M|P|S|T|U]
+            [-r A|D|N|R|O] [-p <placeholder_file> <placeholder_format>
             <placeholder_column_no>]
 
 
@@ -81,6 +81,7 @@ OPTIONAL:
             {D}escending
             {N}umerical (Ascending)
             {R}eversed alphabetical
+            {O}riginal order
     
     placefolder_file
         
@@ -116,16 +117,16 @@ EXAMPLES EXPLANATION:
 
 EXAMPLE:
     
-    python27 BED__Postmerge_Uncollapse.py data\data_file.tsv tsv 3
+    python27 Tally_Column.py data\data_file.tsv tsv 3
     
-    python27 BED__Postmerge_Uncollapse.py data\data_file.tsv tsv 4 -s ; -m F
+    python27 Tally_Column.py data\data_file.tsv tsv 4 -s ; -m F
             -o results\data_column_4_tallied.csv -r D
 
 USAGE:
     
-    python27 BED__Postmerge_Uncollapse.py <input_file> <input_format>
-            <column_no> [-o <output_file>] [-s <separator>] [-m C|F|M|P|S|T|U]
-            [-r A|D|N|R] [-p <placeholder_file> <placeholder_format>
+    python27 Tally_Column.py <input_file> <input_format> <column_no>
+            [-o <output_file>] [-s <separator>] [-m C|F|M|P|S|T|U]
+            [-r A|D|N|R|O] [-p <placeholder_file> <placeholder_format>
             <placeholder_column_no>]
 """
 
@@ -184,6 +185,7 @@ class ORDER:
     DESCENDING=2
     NUMERICAL_ASCENDING=3
     REVERSED_ALPHABETICAL=4
+    ORIGINAL=5
 
 
 
@@ -267,6 +269,7 @@ LIST__reversed = ["R", "r", "REVERSED", "Reversed", "reversed"]
 LIST__ascending = ["N", "n", "NUMERICAL", "Numerical", "numerical", "ASCENDING",
         "Ascending", "ascending"]
 LIST__descending = ["D", "d", "DESCENDING", "Descending", "descending"]
+LIST__original = ["O", "o", "ORIGINAL", "Original", "original"]
 
 
 
@@ -295,6 +298,7 @@ for i in LIST__alphabetical: DICT__order[i] = ORDER.ALPHABETICAL
 for i in LIST__reversed: DICT__order[i] = ORDER.REVERSED_ALPHABETICAL
 for i in LIST__ascending: DICT__order[i] = ORDER.NUMERICAL_ASCENDING
 for i in LIST__descending: DICT__order[i] = ORDER.DESCENDING
+for i in LIST__original: DICT__order[i] = ORDER.ORIGINAL
 
 
 
@@ -355,6 +359,8 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order,
                 2:  Reversed alphabetical (Z-A)
                 3:  Ascending numerical order
                 4:  Descending numerical order
+                5:  Retain the order in which the result appeared in the
+                    original data file.
     @path_placeholder
             (str - filepath)
             The filepath of the "placeholder" file. This is a table file which
@@ -391,6 +397,9 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order,
     f.Close()
     o = open(path_out, "w")
     
+    # Original order
+    original_order = []
+    
     # Placeholders
     if path_placeholder:
         counts = Get_Placeholders(path_placeholder, delim_placeholder,
@@ -398,7 +407,6 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order,
         if not counts:
             PRINT.printE(STR__failed_placeholder)
             return 1
-            
     
     # Main loop
     f.Open()
@@ -420,6 +428,7 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order,
                 value = values[0]
                 if value not in counts:
                     counts[value] = 1
+                    original_order.append(value)
                 else:
                     counts[value] += 1
         elif mode == MODE.COUNT: # Count
@@ -428,6 +437,7 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order,
                 total_value += 1
                 if value not in counts:
                     counts[value] = 1
+                    original_order.append(value)
                 else:
                     counts[value] += 1
         else: # Fraction/Present/Tied/Unique
@@ -438,6 +448,7 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order,
                 mini_total += 1
                 if value not in mini_count:
                     mini_count[value] = 1.0
+                    original_order.append(value)
                 else:
                     mini_count[value] += 1
             # Mode-dependant
@@ -448,6 +459,7 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order,
                     fraction_value = mini_count[value]/mini_total
                     if value not in counts:
                         counts[value] = fraction_value
+                        original_order.append(value)
                     else:
                         counts[value] += fraction_value
             elif mode == MODE.MAJORITY: # Majority
@@ -458,6 +470,7 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order,
                         total_value += 1
                         if value not in counts:
                             counts[value] = 1
+                            original_order.append(value)
                         else:
                             counts[value] += 1
             elif mode == MODE.PRESENT: # Present
@@ -466,6 +479,7 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order,
                     total_value += 1
                     if value not in counts:
                         counts[value] = 1
+                        original_order.append(value)
                     else:
                         counts[value] += 1
             elif mode == MODE.TIED: # Tied
@@ -479,6 +493,7 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order,
                         total_value += 1
                         if value not in counts:
                             counts[value] = 1
+                            original_order.append(value)
                         else:
                             counts[value] += 1
             elif mode == MODE.UNIQUE: # Unique
@@ -488,6 +503,7 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order,
                         total_value += 1
                         if value not in counts:
                             counts[value] = 1
+                            original_order.append(value)
                         else:
                             counts[value] += 1
             else:
@@ -497,7 +513,10 @@ def Tally_Column(path_in, delim, col_no, path_out, separator, mode, order,
                 return 2
     
     # Write
-    keys = Get_Keys_Order(counts, order)
+    if order == ORDER.ORIGINAL:
+        keys = original_order
+    else:
+        keys = Get_Keys_Order(counts, order)
     for k in keys:
         sb = k + "\t" + str(counts[k]) + "\n"
         o.write(sb)
@@ -707,8 +726,8 @@ def Parse_Command_Line_Input__Tally_Column(raw_command_line_input):
         PRINT.printE(STR__use_help)
         return 1
     col_no = Validate_Int_Positive(col_no_str)
-    if valid == 1:
-        PRINT.printE(STR__invalid_table_format.format(f = col_no_str))
+    if col_no == -1:
+        PRINT.printE(STR__invalid_column_no.format(s = col_no_str))
         PRINT.printE(STR__use_help)
         return 1
     col_no = col_no - 1
