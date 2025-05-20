@@ -96,11 +96,11 @@ EXAMPLES:
     
     python27 Add_Column.py data\data_file.tsv tsv -a 1 "" "" -h N
     
-    python27 Add_Column.py data\data_file.tsv tsv -a -1 "" "" -h N
+    python27 Add_Column.py data\data_file.csv csv -a -1 "" "" -h N
     
     python27 Add_Column.py data\data_file.tsv tsv -a 1 "" "" -a -1 "" "" -h N
     
-    python27 Add_Column.py data\data_file.tsv tsv -o data\\new_data_file.tsv -a
+    python27 Add_Column.py data\data_file.csv csv -o data\\new_data_file.tsv -a
             4 "Preferred Name" "(Same as given name)" -h Y
 
 USAGE:
