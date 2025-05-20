@@ -677,7 +677,7 @@ def Parse_Command_Line_Input__Calculate_New_Columns(raw_command_line_input):
         PRINT.printE(STR__IO_error_write_forbid)
         return 1
     if valid_out == 4:
-        PRINT.printE(STR__In_error_write_unable)
+        PRINT.printE(STR__IO_error_write_unable)
         return 1
     
     # Run program
