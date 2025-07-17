@@ -1,6 +1,6 @@
 HELP_DOC = """
 COLUMN OPERATIONS
-(version 1.0)
+(version 1.0.1)
 by Angelo Chan
 
 This is a program for performing simple operations on table data such as adding,
@@ -64,8 +64,8 @@ OPTIONAL:
             {MUL}tiply    - Multiple two columns
             {PRO}duct     - Multiple multiple columns
             {DIV}ide      - Divide the first column by the second one
-            {AV}era{G}e   - Calculate the average value of multiple columns.
-            con{CAT}enate - Concatenate the text of the two columns.
+            {AV}era{G}e   - Calculate the average value of multiple columns
+            con{CAT}enate - Concatenate the text of the two columns
     
     col_no
         
