@@ -135,11 +135,22 @@ OPTIONAL:
     
     col_nos
         
-        An underscore separated list of column numbers. Users can also use "ALL"
-        to specify all columns.
+        A list of column numbers. Users can use one of several formats to
+        specify the column numbers:
+                
+            1:  "ALL" to specify all columns.
+            
+            2:  Underscore-separated list.
+                    1_2_3 specifies columns 1, 2, and 3
+            
+            3:  Square bracket indices. (but with a non-standard indeces system)
+                    [:3] specifies the first 3 columns
+                    [-3:] specifies the last 3 columns
+                    [4:6] specifies columns 4, 5, and 6
+                    [2:-2] specifies all columns except the first and last
         
-        The "ALL" option will calculate column numbers after skip any header
-        rows designated as keep/skip.
+        Negative indices and the "ALL" option are derived from the first row not
+        designated as keep/skip by the header specifications.
         
         The column numbers use the index 1 system, not index 0. Ex. To specify
         the first column, use "1".
@@ -312,7 +323,7 @@ EXAMPLES:
             -n Notes Placeholder_Text -k 5
     
     09:
-    python27 Multitool_For_Tables.py Path/Input.tsv tsv -k 1_2_3_4_5
+    python27 Multitool_For_Tables.py Path/Input.tsv tsv -k [1:5]
             -c difference 2_3 -c substract 3_2 -c sum 4_5 -a
     
     10:
@@ -412,6 +423,8 @@ def Parse_Command_Line_Input__Multitool_For_Tables(raw_command_line_input):
 
 
 
+# Basic Validators #############################################################
+
 def Validate_Write_Path(filepath):
     """
     Validates the filepath of the input file.
@@ -446,6 +459,10 @@ def Validate_Write_Path(filepath):
         return 0 # Overwriting existing file is possible
     except:
         return 4 # Unable to write to specified filepath
+
+
+
+# Advanced Validators ##########################################################
 
 
 
