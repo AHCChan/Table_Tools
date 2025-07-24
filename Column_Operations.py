@@ -1,6 +1,6 @@
 HELP_DOC = """
 COLUMN OPERATIONS
-(version 1.0.1)
+(version 1.1.0)
 by Angelo Chan
 
 This is a program for performing simple operations on table data such as adding,
@@ -413,6 +413,10 @@ def Calculate_New_Columns(path_in, delim, path_out, header_mode, operations):
         for i in range_:
             operation = operations[i]
             op_result = Perform_Operation(values, operation)
+            if op_result == None:
+                o.close()
+                f.close()
+                return 1
             if operation[0] != OPERATION.CONCATENATE:
                 totals_new[i] += op_result
                 op_result = str(op_result)
@@ -472,9 +476,7 @@ def Perform_Operation(data, operation):
         except:
             PRINT.printE(STR__column_not_found.format(
                     r = total_rows, c = col_no))
-            o.close()
-            f.close()
-            return 3
+            return None
         if op != OPERATION.CONCATENATE:
             try:
                 try:
@@ -484,9 +486,7 @@ def Perform_Operation(data, operation):
             except:
                 PRINT.printE(STR__invalid_value.format(
                         s = val, r = total_rows, c = col_no))
-                o.close()
-                f.close()
-                return 3
+                return None
         values.append(val)
     # Process
     if op == OPERATION.ADD or op == OPERATION.SUM:
