@@ -26,6 +26,13 @@ the output file.
 
 
 
+TRICKS:
+
+To find metrics for already-existing columns, use "-c AVG" and then list the
+column number of the column in question twice, separated by an underscore.
+
+
+
 Accepted file formats:
     - TSV (Tab-Separated Values)
     - CSV (Comma-Separated Values)
@@ -47,12 +54,16 @@ Filtering options (For data in the specified column):
     - NOT EQUALS float  (Data must not match the specified value exactly)
 
 Valid column operations include:
-    - ADD       (2 columns)
-    - SUM       (N columns)
-    - SUBTRACT  (2 columns)
-    - MULTIPLE  (2 columns)
-    - PRODUCT   (N columns)
-    - DIVIDE    (2 columns)
+    - ADD           (2 columns)
+    - SUM           (N columns)
+    - SUBTRACT      (2 columns)
+    - MULTIPLE      (2 columns)
+    - PRODUCT       (N columns)
+    - DIVIDE        (2 columns)
+    - AVERAGE       (N columns)
+    - CONCATENATE   (2 columns)
+    - DIFFERENCE    (2 columns)
+    - GEOMETRIC AVG (N columns)
 
 
 
@@ -211,6 +222,8 @@ OPTIONAL:
             str_eq!     Does not equal <string query>
             cont        Contains <string query>
             cont!       Does not contain <string query>
+            in          Contained within <string query>
+            in!         Not contained within <string query>
             ">"         Greater than <number query>
             ">="        Equal to or greater than <number query>
             "<"         Less than <number query>
@@ -301,6 +314,10 @@ EXAMPLES EXPLANATION:
     10:
     Keep all the data, but remove all duplicate entries after the first
     occurence. Duplicates are defined by the value in column 1.
+    
+    11:
+    Keep all the data, except rows where the 4th column contains "A", "B", or
+    "C".
 
 EXAMPLES:
     
@@ -340,6 +357,9 @@ EXAMPLES:
     
     10:
     python27 Multitool_For_Tables.py Path/Input.tsv tsv -u 1 -k ALL 
+    
+    11:
+    python27 Multitool_For_Tables.py Path/Input.tsv tsv -k ALL -f 4 IN ABC
 
 
 
@@ -385,6 +405,14 @@ PRINT_METRICS = True
 
 
 
+# Default naming system for new columns
+COL_INDICATOR_STR = "c"
+COL_NAME_MIN_DIGITS = 3
+# Currently, the default name for the first column is "c001". To make it "C1",
+# change COL_INDICATOR_STR to "C", and COL_NAME_MIN_DIGITS to 1.
+
+
+
 # Imported Modules #############################################################
 
 import sys
@@ -409,14 +437,16 @@ class CRITERIA:
     STR_NOT_EQ=2
     CONTAINS=3
     NOT_CONTAIN=4
-    GREATER_THAN=5
-    GREAQUALS=6
-    LESS_THAN=7
-    LEQUALS=8
-    INT_EQ=9
-    INT_NOT_EQ=10
-    FLO_EQ=11
-    FLO_NOT_EQ=12
+    IN=5
+    NOT_IN=6
+    GREATER_THAN=7
+    GREAQUALS=8
+    LESS_THAN=9
+    LEQUALS=10
+    INT_EQ=11
+    INT_NOT_EQ=12
+    FLO_EQ=13
+    FLO_NOT_EQ=14
 
 class FILTER_TYPE:
     COL=1
@@ -554,6 +584,8 @@ LIST__str_neq = ["S_EQ!", "STR_EQ!", "S_EQUAL!", "S_EQUALS!", "STR_EQUAL!",
 LIST__cont = ["CONT", "CONTAIN", "CONTAINS"]
 LIST__ncont = ["!CONT", "CONT!", "N_CONT", "NOT_CONT", "N_CONTAIN",
         "N_CONTAINS", "NOT_CONTAIN", "NOT_CONTAINS"]
+LIST__in = ["IN"]
+LIST__nin = ["!IN", "IN!", "N_IN", "NOT_IN"]
 LIST__great = [">", "GREAT", "GREATER", "GREATER_THAN", "MORE_THAN"]
 LIST__greq = [">=", "=>", "G_EQ", "GR_EQ", "GREAQUALS", "GREQUALS"]
 LIST__less = ["<", "LESS", "LESSER", "LESS_THAN"]
@@ -582,6 +614,8 @@ LIST__str_eq = All_Cases(LIST__str_eq)
 LIST__str_neq = All_Cases(LIST__str_neq)
 LIST__cont = All_Cases(LIST__cont)
 LIST__ncont = All_Cases(LIST__ncont)
+LIST__in = All_Cases(LIST__in)
+LIST__nin = All_Cases(LIST__nin)
 LIST__great = All_Cases(LIST__great)
 LIST__greq = All_Cases(LIST__greq)
 LIST__less = All_Cases(LIST__less)
@@ -626,6 +660,8 @@ for i in LIST__str_eq: DICT__criteria[i] = CRITERIA.STR_EQ
 for i in LIST__str_neq: DICT__criteria[i] = CRITERIA.STR_NOT_EQ
 for i in LIST__cont: DICT__criteria[i] = CRITERIA.CONTAINS
 for i in LIST__ncont: DICT__criteria[i] = CRITERIA.NOT_CONTAIN
+for i in LIST__in: DICT__criteria[i] = CRITERIA.IN
+for i in LIST__nin: DICT__criteria[i] = CRITERIA.NOT_IN
 for i in LIST__great: DICT__criteria[i] = CRITERIA.GREATER_THAN
 for i in LIST__greq: DICT__criteria[i] = CRITERIA.GREAQUALS
 for i in LIST__less: DICT__criteria[i] = CRITERIA.LESS_THAN
@@ -640,6 +676,8 @@ DICT__criteria_str = {
     CRITERIA.STR_NOT_EQ: "str!=",
     CRITERIA.CONTAINS: "Contains",
     CRITERIA.NOT_CONTAIN: "!Contains",
+    CRITERIA.IN: "In",
+    CRITERIA.NOT_IN: "!In",
     CRITERIA.GREATER_THAN: ">",
     CRITERIA.GREAQUALS: ">=",
     CRITERIA.LESS_THAN: "<",
@@ -665,12 +703,12 @@ for i in LIST__dif: DICT__operation[i] = OPERATION.DIF
 for i in LIST__geo: DICT__operation[i] = OPERATION.GEO
 
 DICT__operation_str = {
-    OPERATION.ADD: "Addition",
-    OPERATION.SUM: "Addition",
-    OPERATION.SUB: "Subtraction",
-    OPERATION.MUL: "Multiplication",
-    OPERATION.PRO: "Multiplication",
-    OPERATION.DIV: "Division",
+    OPERATION.ADD: "Add",
+    OPERATION.SUM: "Sum",
+    OPERATION.SUB: "Subtract",
+    OPERATION.MUL: "Multiply",
+    OPERATION.PRO: "Product",
+    OPERATION.DIV: "Divide",
     OPERATION.AVG: "Mean",
     OPERATION.CAT: "Concatenate",
     OPERATION.DIF: "Difference",
@@ -694,23 +732,354 @@ def Main():
 
 
 
-def Filter_Line(values, filters, filter_metrics=None):
+def Generate_Headers(old_headers, new_column_specs):
+    """
+    Return a list of column headers.
+    
+    If existing headers are supplied, column headers will be derived from them.
+    Otherwise, a default naming system will be applied.
+    
+    @old_headers
+            (list<str>)
+            Either an empty list, or the original column headers.
+    @new_column_specs
+            (list<SPEC>)
+            A list of specs. Each SPEC specifies either columns to keep, a
+            completely new column, or a value derived from existing columns.
+            
+            The first value in any SPEC is an ENUM denoting what kind of SPEC it
+            is. Subsequent values depend on the first value.
+            
+                SPEC (keeping existing columns):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Column numbers
+                        (list<int>)
+                        A list of column numbers for the columns to be kept.
+                        (0-index)
+                SPEC (creating a new column):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Column header
+                        (str)
+                        The column header of the new column.
+                    - Value
+                        (str)
+                        The contents of the newly created column.
+                SPEC (deriving a new column from the original data):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Operation
+                        (int) - Pseudo ENUM
+                        An ENUM which denotes the operation to use to derive the
+                        contents of the new column. Valid operations include:
+                            1:  Add up two columns
+                            2:  Sum up multiple columns
+                            3:  Subtract the second column from the first one
+                            4:  Multiple two columns
+                            5:  Multiple multiple columns
+                            6:  Divide the first column by the second one
+                            7:  Calculate the average value of multiple columns
+                            8:  Concatenate the text of the two columns
+                            9:  Calculate the difference between two columns
+                            10: Calculate the geometric mean of multiple columns
+                    - Column numbers
+                        (list<int>)
+                        A list of column numbers for the columns to be used for
+                        the operation.
+                        (0-index)
+
+    Generate_Headers(list<str>, list<*>) -> list<str>
+    """
+    # Setup
+    result = []
+    # Loop
+    for spec in new_column_specs:
+        if spec[0] == COL_TYPE.KEEP:
+            col_nos = specs[1]
+            for col_no in col_nos:
+                if old_headers:
+                    name = old_headers[col_no]
+                else:
+                    name = New_Column_Name(col_no)
+                result.append(name)
+        if spec[0] == COL_TYPE.NEW:
+            val = specs[1]
+            result.append(val)
+        if spec[0] == COL_TYPE.CALC:
+            op = spec[1]
+            col_nos = spec[2]
+            #
+            op_str = DICT__operation_str[op]
+            col_str = ""
+            for col_no in col_nos:
+                if old_headers:
+                    name = old_headers[col_no]
+                else:
+                    name = New_Column_Name(col_no)
+                col_str = col_str + "_" + name
+            string = op_str + col_str
+            result.append(string)
+    # Return
+    return result
+
+def New_Column_Name(col_no):
+    """
+    Generate a new column name (1-index) from the column number (0-index).
+    """
+    new_col_no = col_no + 1
+    string = str(new_col_no)
+    if len(string) < COL_NAME_MIN_DIGITS:
+        string = (COL_NAME_MIN_DIGITS*"0") + string
+        string = string[-COL_NAME_MIN_DIGITS:]
+    result = COL_INDICATOR_STR + string
+    return result
+
+
+
+def Create_Col_Metrics(specs):
+    """
+    Return a list of 0s, equivalent in length to the number of operations which
+    derive a new column using existing data, excluding string concatenation
+    operations.
+    
+    @specs
+            (list<SPEC>)
+            A list of specs. Each SPEC specifies either columns to keep, a
+            completely new column, or a value derived from existing columns.
+            
+            The first value in any SPEC is an ENUM denoting what kind of SPEC it
+            is. Subsequent values depend on the first value.
+            
+                SPEC (keeping existing columns):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Column numbers
+                        (list<int>)
+                        A list of column numbers for the columns to be kept.
+                        (0-index)
+                SPEC (creating a new column):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Column header
+                        (str)
+                        The column header of the new column.
+                    - Value
+                        (str)
+                        The contents of the newly created column.
+                SPEC (deriving a new column from the original data):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Operation
+                        (int) - Pseudo ENUM
+                        An ENUM which denotes the operation to use to derive the
+                        contents of the new column. Valid operations include:
+                            1:  Add up two columns
+                            2:  Sum up multiple columns
+                            3:  Subtract the second column from the first one
+                            4:  Multiple two columns
+                            5:  Multiple multiple columns
+                            6:  Divide the first column by the second one
+                            7:  Calculate the average value of multiple columns
+                            8:  Concatenate the text of the two columns
+                            9:  Calculate the difference between two columns
+                            10: Calculate the geometric mean of multiple columns
+                    - Column numbers
+                        (list<int>)
+                        A list of column numbers for the columns to be used for
+                        the operation.
+                        (0-index)
+    
+    Create_Col_Metrics(list<*>) -> list<float>
+    """
+    result = []
+    for spec in specs:
+        if spec[0] == COL_TYPE.CALC:
+            if spec[2] != OPERATION.CAT:
+                result.append(0.0)
+    return result
+
+def Create_Filter_Metrics(filters):
+    """
+    Return a list of 0s, equivalent in length to the number of filtering
+    criteria.
+    
+    Create_Filter_Metrics(list<*>) -> list<int>
+    """
+    length = len(filters)
+    result = length*[0]
+    return result
+
+
+
+def Construct_Line(values, delim, specs, new_col_metrics=None):
+    """
+    Return a new line to write to the output file based on the original values
+    in the file, a delimiter, and a set of criteria to show which values to keep
+    and how to generate new ones.
+    
+    If the metrics for new columns are being tracked, a list can be added as an
+    argument which is updated in accordance with the new rows being created.
+    
+    Return None if there is any kind of problem with the process.
+    
+    @values
+            (list<str>)
+            A row of the original data.
+    @delim
+            (str)
+            The delimiter to be used in the output file.
+    @specs
+            (<list<SPEC>)
+            A list of specs. Each SPEC specifies either columns to keep, a
+            completely new column, or a value derived from existing columns.
+            
+            The first value in any SPEC is an ENUM denoting what kind of SPEC it
+            is. Subsequent values depend on the first value.
+            
+                SPEC (keeping existing columns):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Column numbers
+                        (list<int>)
+                        A list of column numbers for the columns to be kept.
+                        (0-index)
+                SPEC (creating a new column):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Column header
+                        (str)
+                        The column header of the new column.
+                    - Value
+                        (str)
+                        The contents of the newly created column.
+                SPEC (deriving a new column from the original data):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Operation
+                        (int) - Pseudo ENUM
+                        An ENUM which denotes the operation to use to derive the
+                        contents of the new column. Valid operations include:
+                            1:  Add up two columns
+                            2:  Sum up multiple columns
+                            3:  Subtract the second column from the first one
+                            4:  Multiple two columns
+                            5:  Multiple multiple columns
+                            6:  Divide the first column by the second one
+                            7:  Calculate the average value of multiple columns
+                            8:  Concatenate the text of the two columns
+                            9:  Calculate the difference between two columns
+                            10: Calculate the geometric mean of multiple columns
+                    - Column numbers
+                        (list<int>)
+                        A list of column numbers for the columns to be used for
+                        the operation.
+                        (0-index)
+    @new_column_metrics
+            (list<int>)
+            A list of totals for the new columns produced.
+    
+    Construct_Line(list<str>, str, list<*>, list<float>) -> str
+    Construct_Line(list<str>, str, list<*>, list<float>) -> None
+    """
+    # Setup
+    result = []
+    index = 0
+    # Loop
+    for spec in specs:
+        spec_type = spec[0]
+        if spec_type == COL_TYPE.KEEP:
+            col_nos = spec[1]
+            for col_no in col_nos:
+                val = values[col_no]
+                result.append(val)
+        elif spec_type == COL_TYPE.NEW:
+            val = spec[2]
+            result.append(val)
+        elif spec_type == COL_TYPE.CALC:
+            # Unpack and read raws
+            op = spec[1]
+            col_nos = spec[2]
+            raws = []
+            for col_no in col_nos:
+                val = values[col_no]
+                raws.append(val)
+            # Concatenate string
+            if op == OPERATION.CAT:
+                string = "".join(raws)
+                result.append(string)
+            else:
+                # Convert to numbers
+                nums = []
+                for s in raws:
+                    try:
+                        temp = int(s)
+                        nums.append(temp)
+                    except:
+                        try:
+                            temp = float(s)
+                            nums.append(temp)
+                        except:
+                            return None
+                # Other operations
+                if (op == OPERATION.ADD) or (op == OPERATION.SUM):
+                    temp = sum(nums)
+                elif op == OPERATION.SUB:
+                    temp = nums[0] - nums[1]
+                elif (op == OPERATION.MUL) or (op == OPERATION.PRO):
+                    temp = 1
+                    for num in nums:
+                        temp = temp * num
+                elif op == OPERATION.DIV:
+                    temp = (float(nums[0]))/nums[1]
+                elif op == OPERATION.AVG:
+                    temp = 1.0
+                    for num in nums:
+                        temp = temp * num
+                    length = len(nums)
+                    temp = temp/length
+                elif op == OPERATION.DIF:
+                    temp = nums[0] - nums[1]
+                    temp = abs(temp)
+                elif op == OPERATION.GEO:
+                    temp = 1.0
+                    for num in nums:
+                        temp = temp * num
+                    root = 1.0/(len(nums))
+                    temp = temp ** root
+                else:
+                    return None
+                # Process
+                if new_col_metrics:
+                    new_col_metrics[index] += temp
+                    index += 1
+                string = str(temp)
+                result.append(string)
+        else:
+            return None
+    # Return
+    result = delim.join(result)
+    return result
+
+def Filter_Line(data, filters, filter_metrics=None):
     """
     Assess a row of data to see which filters if passes.
     Return True if it passes all "include" filters and fails all "exclude"
     filters. Return False otherwise.
     
     If the metrics for each individual filter are being tracked, a list can be
-    added as an argument is updated in accordance with the outcome. The list is
-    assumed to be a tracker for the number of lines which meet each filtering
-    criteria.
+    added as an argument which is updated in accordance with the outcome. The
+    list is assumed to be a tracker for the number of lines which meet each
+    filtering criteria.
     
-    @values
+    Return None if there is any kind of problem with the process.
+    
+    @data
             (list<str>)
             The row of data being filtered.
     @filters
-            (<list<FILTER>)
-                FILTER = [int(ENUM), int, int(ENUM), int(ENUM)/str]
+            (list<FILTER>)
+                FILTER = [int(ENUM), int, int(ENUM), int(ENUM), int/str]
             A list of filtering criteria. Each filter consists of the following:
                 - Include/Exclude
                     (int) - Pseudo ENUM
@@ -718,6 +1087,7 @@ def Filter_Line(values, filters, filter_metrics=None):
                 - Target column
                     (int)
                     The column number of the column being targetted.
+                    0-index system.
                 - Criteria
                     (int) - Pseudo ENUM
                     What filtering criteria to use.
@@ -730,54 +1100,116 @@ def Filter_Line(values, filters, filter_metrics=None):
                     Either an integer denoting the column number of the column
                     containing the value to be used for the comparison, or the
                     value itself to be used for the comparison.
+                    0-index system for column numbers.
     @filter_metrics
             (list<int>)
             A list of counts for the number of lines (so far) which have met the
             corresponding criteria.
     
     Filter_Line(list<str>, list<list<>(5)>, list<int>) -> bool
+    Filter_Line(list<str>, list<list<>(5)>, list<int>) -> None
     """
-    pass
+    # Setup
+    all_inc = True
+    any_exc = False
+    index = 0
+    # Main loop
+    for filt in filters:
+        inc_exc, target, criteria, comp_type, val_ref = filt
+        # Get values
+        val_1 = data[target]
+        if comp_type == FILTER_TYPE.COL:
+            val_2 = data[val_ref]
+        elif comp_type == FILTER_TYPE.VAL:
+            val_2 = val_ref
+        else: # Shouldn't happen
+            return None
+        # Compare
+        flag = False
+        if criteria == CRITERIA.STR_EQ:
+            if val_1 == val_2:
+                flag = True
+        elif criteria == CRITERIA.STR_NOT_EQ:
+            if val_1 != val_2:
+                flag = True
+        elif criteria == CRITERIA.CONTAINS:
+            if val_2 in val_1:
+                flag = True
+        elif criteria == CRITERIA.NOT_CONTAIN:
+            if val_2 not in val_1:
+                flag = True
+        elif criteria == CRITERIA.IN:
+            if val_1 in val_2:
+                flag = True
+        elif criteria == CRITERIA.NOT_IN:
+            if val_1 not in val_2:
+                flag = True
+        elif criteria == CRITERIA.GREATER_THAN:
+            if val_1 > val_2:
+                flag = True
+        elif criteria == CRITERIA.GREAQUALS:
+            if val_1 >= val_2:
+                flag = True
+        elif criteria == CRITERIA.LESS_THAN:
+            if val_1 < val_2:
+                flag = True
+        elif criteria == CRITERIA.LEQUALS:
+            if val_1 <= val_2:
+                flag = True
+        elif criteria == CRITERIA.INT_EQ:
+            try:
+                val_1 = int(val_1)
+                val_2 = int(val_2)
+                if val_1 == val_2:
+                    flag = True
+            except:
+                pass
+        elif criteria == CRITERIA.INT_NOT_EQ:
+            try:
+                val_1 = int(val_1)
+                val_2 = int(val_2)
+                if val_1 != val_2:
+                    flag = True
+            except:
+                pass
+        elif criteria == CRITERIA.FLO_EQ:
+            try:
+                val_1 = float(val_1)
+                val_2 = float(val_2)
+                if val_1 == val_2:
+                    flag = True
+            except:
+                pass
+        elif criteria == CRITERIA.FLO_NOT_EQ:
+            try:
+                val_1 = float(val_1)
+                val_2 = float(val_2)
+                if val_1 != val_2:
+                    flag = True
+            except:
+                pass
+        else: # Shouldn't happen
+            return None
+        # Update flags
+        if inc_exc == INC_EXC.INCLUDE:
+            if not flag:
+                all_inc = False
+        elif inc_exc == INC_EXC.EXCLUDE:
+            if flag:
+                any_exc = True
+        else:
+            return None
+        # Update metrics
+        if filter_metrics:
+            if flag:
+                filter_metrics[index] += 1
+            index += 1
+    # Return
+    if all_inc and not any_exc:
+        return True
+    return False
 
 
-
-def Generate_New_Line(values, delimiter, new_row_specs, new_col_metrics=None):
-    """
-    Generate a new line of data according to [new_row_specs].
-    
-    @values
-            (list<str>)
-            The original data.
-    @delim
-            (str)
-            The delimiter used by the output file.
-    @new_row_specs
-            (<list<SPECS>)
-            A list of specs specifying what to add to the new row of data. Each
-            SPECS falls into one of three types:
-                KEEP:       Keep the value, as is, of a column in the original
-                            data.
-                NEW:        Add a new column with a static value for all rows.
-                OPERATION:  Derive a new value from the data in the original
-                            data.
-            Each SPECS begins with an int (pseudo ENUM) signifying whether it is
-            a KEEP, a NEW, or an OPERATION.
-            For KEEP, there will only be one more value in the SPEC - the column
-            number of the original data to include in the output.
-            For NEW, there will only be one more value in the SPEC - the string
-            to add to that column in all rows of the output.
-            For OPERATION, there will be two more values in the SPEC - an int
-            (pseudo ENUM) signifying which operation to perform, and a list of
-            ints which are the column numbers of the columns to perform the
-            operation on.
-    @new_col_metrics
-            (list<float>)
-            A list of cumulative totals. Each total corresponds to an OPERATION
-            column.
-    
-    Filter_Line(list<str>, str, list<list<>>, list<int>) -> bool
-    """
-    pass
 
 
 
@@ -1209,6 +1641,8 @@ def Validate_Criteria(string):
     if string in LIST__str_neq: return CRITERIA.STR_NOT_EQ
     if string in LIST__cont: return CRITERIA.CONTAINS
     if string in LIST__ncont: return CRITERIA.CONTAINS
+    if string in LIST__in: return CRITERIA.IN
+    if string in LIST__nin: return CRITERIA.NOT_IN
     if string in LIST__great: return CRITERIA.GREATER_THAN
     if string in LIST__greq: return CRITERIA.GREAQUALS
     if string in LIST__less: return CRITERIA.LESS_THAN
