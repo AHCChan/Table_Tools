@@ -72,9 +72,9 @@ USAGE:
     python27 Multitool_For_Tables.py <input_path> <{input_format}>
             [-o <output_path> {output_format}] [-a]
             [-h keep|skip|rearrange C|N|(none) <number>|<character>|(none)]...
-            [-k <col_nos>]...
             [-f include|exclude <col_no> <criteria> C|V <col_no>|<value>]...
-            [-n <header> <contents>]... [-c <col_operation> <col_nos>]...
+            [-k <col_nos>]... [-n <header> <contents>]...
+            [-c <header> <col_operation> <col_nos>]...
             [-u <col_nos>]
 
 
@@ -251,7 +251,8 @@ OPTIONAL:
     
     header
     
-        The header used for the newly created column.
+        The header used for the newly created column. When an empty header is
+        supplied for "-c", one will be created based on the other arguments.
     
     contents
     
@@ -308,8 +309,10 @@ EXAMPLES EXPLANATION:
     
     09:
     Keep the first 5 columns of the file. Calculate the difference between
-    columns 2 and 3. Calculate column 3 minutes column 2. Calculate the sum of
-    columns 4 and 5. The original file has no column headers. Create new ones.
+    columns 2 and 3. Calculate column 3 minus column 2. Calculate the sum of
+    columns 4 and 5. The original file has no column headers; create new ones.
+    For the first two calculations, use the default column header creation
+    method. For the last one, use "Total" as the column header.
     
     10:
     Keep all the data, but remove all duplicate entries after the first
@@ -353,7 +356,7 @@ EXAMPLES:
     
     09:
     python27 Multitool_For_Tables.py Path/Input.tsv tsv -k [1:5]
-            -c difference 2_3 -c substract 3_2 -c sum 4_5 -a
+            -c "" difference 2_3 -c "" substract 3_2 -c Total sum 4_5 -a
     
     10:
     python27 Multitool_For_Tables.py Path/Input.tsv tsv -u 1 -k ALL 
@@ -368,9 +371,9 @@ USAGE:
     python27 Multitool_For_Tables.py <input_path> <{input_format}>
             [-o <output_path> {output_format}] [-a]
             [-h keep|skip|rearrange C|N|(none) <number>|<character>|(none)]...
-            [-k <col_nos>]...
             [-f include|exclude <col_no> <criteria> C|V <col_no>|<value>]...
-            [-n <header> <contents>]... [-c <col_operation> <col_nos>]...
+            [-k <col_nos>]... [-n <header> <contents>]...
+            [-c <header> <col_operation> <col_nos>]...
             [-u <col_nos>]
 """
 
@@ -420,7 +423,7 @@ import sys
 import _Controlled_Print as PRINT
 from _Command_Line_Parser import * # 2.3
 
-from Table_File_Reader import * # 1.1.1
+from Table_File_Reader import * # 2.0
 
 
 
@@ -429,6 +432,11 @@ from Table_File_Reader import * # 1.1.1
 class HEADER_TYPE:
     CHAR=1
     NUM=2
+
+class KSR:
+    KEEP=1
+    SKIP=2
+    REAR=3
 
 
 
@@ -560,12 +568,17 @@ STR__metrics = """
         Rows of data: {C}
              Columns: {D}
         
-        Number of rows which met each criteria:
+        Non-unique rows eliminated:
                       {E}
         
-        Average value of new columns:
+        Number of rows which met each criteria:
                       {F}
+        
+        Average value of new columns:
+                      {G}
 """
+
+STR__metrics_spacer = "\n                      "
 
 
 
@@ -727,10 +740,132 @@ PRINT.PRINT_METRICS = PRINT_METRICS
 
 # Table Processing Functions ###################################################
 
-def Main():
-    pass
+def Multitool_For_Tables(input_path, input_delim, output_path, output_delim,
+        new_headers, header_specs, filters, new_column_specs, unique_cols):
+    """
+    Parse a table file. Possible functionality includes:
+        - Converting the file format
+        - Retaining, creating, or omitting column headers
+        - Retaining, duplicating, or omitting different columns
+        - Adding new columns with a set value
+        - Adding new columns which are derived from data in existing columns
+        - Filtering individual rows based on user-specified criteria
+        - Omit rows with non-unique values in a specific combination of columns
+    
+    @path_in
+            (str - filepath)
+            The filepath of the input file.
+    @delim_in
+            (str)
+            The delimiter use by the input file.
+    @path_out
+            (str - filepath)
+            The filepath of the output file.
+    @delim_out
+            (str)
+            The delimiter use by the output file.
+    @new_headers_b
+            (bool)
+            Whether or not to create new headers.
+    @header_specs
+    @filters
+    @new_column_specs
+    @unique_cols
+    
+    Multitool_For_Tables(str, str, str, str, bool, list<*>, list<*>, list<*>,
+            list<int>) -> int
+    """
+    PRINT.printP(STR__m4t_begin)
+    
+    # Setup reporting
+    rows_in = 0
+    cols_in = Get_No_Columns(path_in, delim_in, header_specs)
+    rows_out = 0
+    cols_out = Get_No_Columns_Out(new_column_specs)
+    repeats_elim = 0
+    col_metrics = Create_Col_Metrics(new_column_specs)
+    filter_metrics = Create_Filter_Metrics(filters)
+    
+    # Setup unique
+    if not unique_cols: unique_cols = False
+    unique_keys = set([])
+    
+    # I/O setup
+    f = Table_Reader()
+    f.Set_New_Path(path_in)
+    f.Set_Delimiter(delim_in)
+    if header_specs:
+        f.Set_Adv_Header_Params([header_specs])
+    f.Open()
+    o = open(path_out, "w")
+    
+    # Header
+    header_out_str, new_col_headers = f.Adv_Process_Header_Text()
+    o.write(header_out_str)
+    if new_headers_b or new_col_headers:
+        new_col_headers = Generate_Headers(og_col_headers, new_column_specs)
+        string = delim_out.join(new_col_headers) + "\n"
+        o.write(string)
+    
+    # Main loop
+    while not f.EOF:
+        rows_in += 1
+        f.Read()
+        values = f.current_element
+        # Filter and unique
+        filter_pass = Filter_Line(data, filters, filter_metrics)
+        if filter_pass:
+            flag = True
+            if unique_cols:
+                new_key = Generate_Key(values, key_cols)
+                if new_key in unique_keys:
+                    flag = False
+                    repeats_elim += 1
+                else:
+                    unique_keys.add(new_key)
+            if flag:
+                rows_out += 1
+                new_line = Construct_Line(values, delim, specs, col_metrics)
+                o.write(new_line)
+    
+    # Finish
+    f.Close()
+    o.close()
+    PRINT.printP(STR__m4t_complete)
+    
+    # Reporting
+    Report_Metrics(rows_in, cols_in, rows_out, cols_out, repeats_elim,
+            filter_metrics, col_metrics)
+    
+    # Wrap up
+    return 0
 
 
+
+def Get_No_Columns_Out(new_column_specs):
+    """
+    Return the number of columns the output file would produce, based on the new
+    column specs.
+    
+    @new_column_specs
+            (list<SPEC>)
+            A list of specs. Each SPEC specifies either columns to keep, a
+            completely new column, or a value derived from existing columns.
+            The first value in any SPEC is an ENUM denoting what kind of SPEC it
+            is. Subsequent values depend on the first value.
+            When specifying to KEEP existing columns, the second value is a list
+            of column numbers.
+    
+    Get_No_Columns_Out(list<*>) -> int
+    """
+    result = 0
+    for spec in new_column_specs:
+        if spec[0] == COL_TYPE.KEEP:
+            length = len(spec[1])
+            result += length
+        else: # NEW, or CALC
+            result += 1
+    return result    
 
 def Generate_Headers(old_headers, new_column_specs):
     """
@@ -752,7 +887,6 @@ def Generate_Headers(old_headers, new_column_specs):
             
                 SPEC (keeping existing columns):
                     - Type
-                        (int) - Pseudo ENUM
                     - Column numbers
                         (list<int>)
                         A list of column numbers for the columns to be kept.
@@ -769,6 +903,11 @@ def Generate_Headers(old_headers, new_column_specs):
                 SPEC (deriving a new column from the original data):
                     - Type
                         (int) - Pseudo ENUM
+                    - Header
+                        (str)
+                        The column header of the new column. An empty string
+                        indicates that a column header should be generated from
+                        the operation and column numbers.
                     - Operation
                         (int) - Pseudo ENUM
                         An ENUM which denotes the operation to use to derive the
@@ -804,22 +943,26 @@ def Generate_Headers(old_headers, new_column_specs):
                     name = New_Column_Name(col_no)
                 result.append(name)
         if spec[0] == COL_TYPE.NEW:
-            val = specs[1]
+            val = spec[1]
             result.append(val)
         if spec[0] == COL_TYPE.CALC:
-            op = spec[1]
-            col_nos = spec[2]
-            #
-            op_str = DICT__operation_str[op]
-            col_str = ""
-            for col_no in col_nos:
-                if old_headers:
-                    name = old_headers[col_no]
-                else:
-                    name = New_Column_Name(col_no)
-                col_str = col_str + "_" + name
-            string = op_str + col_str
-            result.append(string)
+            val = spec[1]
+            if val:
+                result.append(val)
+            else:
+                op = spec[2]
+                col_nos = spec[3]
+                #
+                op_str = DICT__operation_str[op]
+                col_str = ""
+                for col_no in col_nos:
+                    if old_headers:
+                        name = old_headers[col_no]
+                    else:
+                        name = New_Column_Name(col_no)
+                    col_str = col_str + "_" + name
+                string = op_str + col_str
+                result.append(string)
     # Return
     return result
 
@@ -870,6 +1013,11 @@ def Create_Col_Metrics(specs):
                 SPEC (deriving a new column from the original data):
                     - Type
                         (int) - Pseudo ENUM
+                    - Header
+                        (str)
+                        The column header of the new column. An empty string
+                        indicates that a column header should be generated from
+                        the operation and column numbers.
                     - Operation
                         (int) - Pseudo ENUM
                         An ENUM which denotes the operation to use to derive the
@@ -911,155 +1059,6 @@ def Create_Filter_Metrics(filters):
     return result
 
 
-
-def Construct_Line(values, delim, specs, new_col_metrics=None):
-    """
-    Return a new line to write to the output file based on the original values
-    in the file, a delimiter, and a set of criteria to show which values to keep
-    and how to generate new ones.
-    
-    If the metrics for new columns are being tracked, a list can be added as an
-    argument which is updated in accordance with the new rows being created.
-    
-    Return None if there is any kind of problem with the process.
-    
-    @values
-            (list<str>)
-            A row of the original data.
-    @delim
-            (str)
-            The delimiter to be used in the output file.
-    @specs
-            (<list<SPEC>)
-            A list of specs. Each SPEC specifies either columns to keep, a
-            completely new column, or a value derived from existing columns.
-            
-            The first value in any SPEC is an ENUM denoting what kind of SPEC it
-            is. Subsequent values depend on the first value.
-            
-                SPEC (keeping existing columns):
-                    - Type
-                        (int) - Pseudo ENUM
-                    - Column numbers
-                        (list<int>)
-                        A list of column numbers for the columns to be kept.
-                        (0-index)
-                SPEC (creating a new column):
-                    - Type
-                        (int) - Pseudo ENUM
-                    - Column header
-                        (str)
-                        The column header of the new column.
-                    - Value
-                        (str)
-                        The contents of the newly created column.
-                SPEC (deriving a new column from the original data):
-                    - Type
-                        (int) - Pseudo ENUM
-                    - Operation
-                        (int) - Pseudo ENUM
-                        An ENUM which denotes the operation to use to derive the
-                        contents of the new column. Valid operations include:
-                            1:  Add up two columns
-                            2:  Sum up multiple columns
-                            3:  Subtract the second column from the first one
-                            4:  Multiple two columns
-                            5:  Multiple multiple columns
-                            6:  Divide the first column by the second one
-                            7:  Calculate the average value of multiple columns
-                            8:  Concatenate the text of the two columns
-                            9:  Calculate the difference between two columns
-                            10: Calculate the geometric mean of multiple columns
-                    - Column numbers
-                        (list<int>)
-                        A list of column numbers for the columns to be used for
-                        the operation.
-                        (0-index)
-    @new_column_metrics
-            (list<int>)
-            A list of totals for the new columns produced.
-    
-    Construct_Line(list<str>, str, list<*>, list<float>) -> str
-    Construct_Line(list<str>, str, list<*>, list<float>) -> None
-    """
-    # Setup
-    result = []
-    index = 0
-    # Loop
-    for spec in specs:
-        spec_type = spec[0]
-        if spec_type == COL_TYPE.KEEP:
-            col_nos = spec[1]
-            for col_no in col_nos:
-                val = values[col_no]
-                result.append(val)
-        elif spec_type == COL_TYPE.NEW:
-            val = spec[2]
-            result.append(val)
-        elif spec_type == COL_TYPE.CALC:
-            # Unpack and read raws
-            op = spec[1]
-            col_nos = spec[2]
-            raws = []
-            for col_no in col_nos:
-                val = values[col_no]
-                raws.append(val)
-            # Concatenate string
-            if op == OPERATION.CAT:
-                string = "".join(raws)
-                result.append(string)
-            else:
-                # Convert to numbers
-                nums = []
-                for s in raws:
-                    try:
-                        temp = int(s)
-                        nums.append(temp)
-                    except:
-                        try:
-                            temp = float(s)
-                            nums.append(temp)
-                        except:
-                            return None
-                # Other operations
-                if (op == OPERATION.ADD) or (op == OPERATION.SUM):
-                    temp = sum(nums)
-                elif op == OPERATION.SUB:
-                    temp = nums[0] - nums[1]
-                elif (op == OPERATION.MUL) or (op == OPERATION.PRO):
-                    temp = 1
-                    for num in nums:
-                        temp = temp * num
-                elif op == OPERATION.DIV:
-                    temp = (float(nums[0]))/nums[1]
-                elif op == OPERATION.AVG:
-                    temp = 1.0
-                    for num in nums:
-                        temp = temp * num
-                    length = len(nums)
-                    temp = temp/length
-                elif op == OPERATION.DIF:
-                    temp = nums[0] - nums[1]
-                    temp = abs(temp)
-                elif op == OPERATION.GEO:
-                    temp = 1.0
-                    for num in nums:
-                        temp = temp * num
-                    root = 1.0/(len(nums))
-                    temp = temp ** root
-                else:
-                    return None
-                # Process
-                if new_col_metrics:
-                    new_col_metrics[index] += temp
-                    index += 1
-                string = str(temp)
-                result.append(string)
-        else:
-            return None
-    # Return
-    result = delim.join(result)
-    return result
 
 def Filter_Line(data, filters, filter_metrics=None):
     """
@@ -1209,7 +1208,240 @@ def Filter_Line(data, filters, filter_metrics=None):
         return True
     return False
 
+def Generate_Key(values, key_cols):
+    """
+    Return a tuple using the values in [values] and the specified column
+    numbers.
+    
+    @values
+            (list<str>)
+            A row of data from a table file.
+    @key_cols
+            (list<int>)
+            The column numbers of the columns which comprise the key.
+            (0-index system)
+    
+    Generate_Key(list<str>, list<int>) -> tuple<str>
+    """
+    result = []
+    for col in key_cols:
+        val = values[col]
+        result.append(val)
+    result = tuple(result)
+    return result
 
+def Construct_Line(values, delim, specs, new_col_metrics=None):
+    """
+    Return a new line to write to the output file based on the original values
+    in the file, a delimiter, and a set of criteria to show which values to keep
+    and how to generate new ones.
+    
+    If the metrics for new columns are being tracked, a list can be added as an
+    argument which is updated in accordance with the new rows being created.
+    
+    Return None if there is any kind of problem with the process.
+    
+    @values
+            (list<str>)
+            A row of the original data.
+    @delim
+            (str)
+            The delimiter to be used in the output file.
+    @specs
+            (<list<SPEC>)
+            A list of specs. Each SPEC specifies either columns to keep, a
+            completely new column, or a value derived from existing columns.
+            
+            The first value in any SPEC is an ENUM denoting what kind of SPEC it
+            is. Subsequent values depend on the first value.
+            
+                SPEC (keeping existing columns):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Column numbers
+                        (list<int>)
+                        A list of column numbers for the columns to be kept.
+                        (0-index)
+                SPEC (creating a new column):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Column header
+                        (str)
+                        The column header of the new column.
+                    - Value
+                        (str)
+                        The contents of the newly created column.
+                SPEC (deriving a new column from the original data):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Header
+                        (str)
+                        The column header of the new column. An empty string
+                        indicates that a column header should be generated from
+                        the operation and column numbers.
+                    - Operation
+                        (int) - Pseudo ENUM
+                        An ENUM which denotes the operation to use to derive the
+                        contents of the new column. Valid operations include:
+                            1:  Add up two columns
+                            2:  Sum up multiple columns
+                            3:  Subtract the second column from the first one
+                            4:  Multiple two columns
+                            5:  Multiple multiple columns
+                            6:  Divide the first column by the second one
+                            7:  Calculate the average value of multiple columns
+                            8:  Concatenate the text of the two columns
+                            9:  Calculate the difference between two columns
+                            10: Calculate the geometric mean of multiple columns
+                    - Column numbers
+                        (list<int>)
+                        A list of column numbers for the columns to be used for
+                        the operation.
+                        (0-index)
+    @new_column_metrics
+            (list<int>)
+            A list of totals for the new columns produced.
+    
+    Construct_Line(list<str>, str, list<*>, list<float>) -> str
+    Construct_Line(list<str>, str, list<*>, list<float>) -> None
+    """
+    # Setup
+    result = []
+    index = 0
+    # Loop
+    for spec in specs:
+        spec_type = spec[0]
+        if spec_type == COL_TYPE.KEEP:
+            col_nos = spec[1]
+            for col_no in col_nos:
+                val = values[col_no]
+                result.append(val)
+        elif spec_type == COL_TYPE.NEW:
+            val = spec[2]
+            result.append(val)
+        elif spec_type == COL_TYPE.CALC:
+            # Unpack and read raws
+            op = spec[2]
+            col_nos = spec[3]
+            raws = []
+            for col_no in col_nos:
+                val = values[col_no]
+                raws.append(val)
+            # Concatenate string
+            if op == OPERATION.CAT:
+                string = "".join(raws)
+                result.append(string)
+            else:
+                # Convert to numbers
+                nums = []
+                for s in raws:
+                    try:
+                        temp = int(s)
+                        nums.append(temp)
+                    except:
+                        try:
+                            temp = float(s)
+                            nums.append(temp)
+                        except:
+                            return None
+                # Other operations
+                if (op == OPERATION.ADD) or (op == OPERATION.SUM):
+                    temp = sum(nums)
+                elif op == OPERATION.SUB:
+                    temp = nums[0] - nums[1]
+                elif (op == OPERATION.MUL) or (op == OPERATION.PRO):
+                    temp = 1
+                    for num in nums:
+                        temp = temp * num
+                elif op == OPERATION.DIV:
+                    temp = (float(nums[0]))/nums[1]
+                elif op == OPERATION.AVG:
+                    temp = 1.0
+                    for num in nums:
+                        temp = temp * num
+                    length = len(nums)
+                    temp = temp/length
+                elif op == OPERATION.DIF:
+                    temp = nums[0] - nums[1]
+                    temp = abs(temp)
+                elif op == OPERATION.GEO:
+                    temp = 1.0
+                    for num in nums:
+                        temp = temp * num
+                    root = 1.0/(len(nums))
+                    temp = temp ** root
+                else:
+                    return None
+                # Process
+                if new_col_metrics:
+                    new_col_metrics[index] += temp
+                    index += 1
+                string = str(temp)
+                result.append(string)
+        else:
+            return None
+    # Return
+    result = delim.join(result)
+    return result
+
+
+
+def Report_Metrics(rows_in, cols_in, rows_out, cols_out, repeats_elim,
+        filter_metrics, col_metrics):
+    """
+    Print a report into the command line interface of the metrics of the
+    operation.
+    
+    @rows_in
+            (int)
+            The number of rows of data in the input file.
+    @cols_in
+            (int)
+            The number of columns of data in the input file.
+    @rows_out
+            (int)
+            The number of rows of data in the output file.
+    @cols_out
+            (int)
+            The number of columns of data in the output file.
+    @repeats_elim
+            (int)
+            The number of rows of data which were not eliminated by filtering
+            criteria, but were eliminated due to having a non-unique key.
+    @filter_metrics
+            (list<int>)
+            The total rows which met each filtering criteria.
+    @col_metrics
+            (list<float>)
+            The total value of each calculated column
+    
+    Report_Metrics(int, int, list<int>) -> None
+    """
+    # Preparing for splitting
+    col_metrics_len = len(col_metrics)
+    filter_metrics_ = []
+    col_metrics_ = []
+    # Combine
+    all_nums = ([rows_in, cols_in, rows_out, cols_out, repeats_elim] +
+            filter_metrics + col_metrics)
+    # Convert and pad
+    all_nums = Pad_Column_MixedNums(all_nums, 6, 0, 0, " ")
+    # Split
+    if col_metrics:
+        col_metrics_ = all_nums[-col_metrics_len:]
+        all_nums = all_nums[:-col_metrics_len]
+    if filter_metrics:
+        filter_metrics_ = all_nums[5:]
+        all_nums = all_nums[:5]
+    # Unpack and convert
+    rows_in, cols_in, rows_out, cols_out, repeats_elim = all_nums
+    filter_metrics_ = STR__metrics_spacer.join(filter_metrics_)
+    col_metrics_ = STR__metrics_spacer.join(col_metrics_)
+    # Print
+    PRINT.printM(STR__metrics.format(
+            A = rows_in, B = cols_in, C = rows_out, D = cols_out,
+            E = repeats_elim,
+            F = filter_metrics_, G = col_metrics_))
 
 
 
