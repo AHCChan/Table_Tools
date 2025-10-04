@@ -70,7 +70,7 @@ Valid column operations include:
 USAGE:
     
     python27 Multitool_For_Tables.py <input_path> <{input_format}>
-            [-o <output_path> {output_format}] [-a]
+            [-o <output_path> {output_format}] [-a Y|N]
             [-h keep|skip|rearrange C|N|(none) <number>|<character>|(none)]...
             [-f include|exclude <col_no> <criteria> C|V <col_no>|<value>]...
             [-k <col_nos>]... [-n <header> <contents>]...
@@ -101,8 +101,6 @@ OPTIONAL:
         The filepath of the output file.
     
     output_format
-        
-        (DEFAULT: same as input_format)
         
         The file format of the output file. If no format is specified, the
         output format will be the same as the input format. Acceptable options
@@ -143,9 +141,11 @@ OPTIONAL:
         If the option "C" was chosen, then this specifies which character a line
         should start with to keep/skip/rearrange it.
     
-    (-a)
+    Y|N
         
-        Create new column headers.
+        (DEFAULT: N)
+        
+        Whether or not to create new column headers.
     
     col_nos
         
@@ -356,7 +356,7 @@ EXAMPLES:
     
     09:
     python27 Multitool_For_Tables.py Path/Input.tsv tsv -k [1:5]
-            -c "" difference 2_3 -c "" substract 3_2 -c Total sum 4_5 -a
+            -c "" difference 2_3 -c "" substract 3_2 -c Total sum 4_5 -a Y
     
     10:
     python27 Multitool_For_Tables.py Path/Input.tsv tsv -u 1 -k ALL 
@@ -369,7 +369,7 @@ EXAMPLES:
 USAGE:
     
     python27 Multitool_For_Tables.py <input_path> <{input_format}>
-            [-o <output_path> {output_format}] [-a]
+            [-o <output_path> {output_format}] [-a Y|N]
             [-h keep|skip|rearrange C|N|(none) <number>|<character>|(none)]...
             [-f include|exclude <col_no> <criteria> C|V <col_no>|<value>]...
             [-k <col_nos>]... [-n <header> <contents>]...
@@ -392,6 +392,8 @@ problematic characters ("!", ">", "<", "=") include:
     INT_EQ!     INT_N_EQ, INTEGER_NOT_EQUAL
     FLO_EQ!     FLO_N_EQ, FLOAT_NOT_EQUAL
 """
+
+NAME = "Multitool_For_Tables.py"
 
 
 
@@ -416,12 +418,27 @@ COL_NAME_MIN_DIGITS = 3
 
 
 
+# Minor Configurations #########################################################
+
+FILEMOD = "__MT"
+
+
+
+# Defaults #####################################################################
+"NOTE: altering these will not alter the values displayed in the HELP DOC"
+
+DEFAULT__new_headers = False
+
+DEFAULT_list_delim = "_"
+
+
+
 # Imported Modules #############################################################
 
 import sys
 
 import _Controlled_Print as PRINT
-from _Command_Line_Parser import * # 2.3
+from _Command_Line_Parser import * # 2.6
 
 from Table_File_Reader import * # 2.0
 
@@ -462,17 +479,7 @@ class FILTER_TYPE:
 
 
 
-class OPERATION:
-    ADD=1
-    SUM=2
-    SUB=3
-    MUL=4
-    PRO=5
-    DIV=6
-    AVG=7
-    CAT=8
-    DIF=9
-    GEO=10
+class 
 
 
 
@@ -490,22 +497,6 @@ STR__use_help = "\nUse the -h option for help:\n\t python "\
 
 
 
-STR__invalid_ksr = """
-ERROR: Invalid header treatment option: {s}
-Please specify one of the following:
-    keep
-    skip
-    rear
-"""
-STR__invalid_header_type = """
-ERROR: Invalid type action to take: {s}
-Please specify one of:
-    num
-    char
-"""
-
-
-
 STR__invalid_column_no = """
 ERROR: Invalid column number: {s}
 Please specify a positive integer.
@@ -516,7 +507,7 @@ Please specify either "ALL", an underscore-separate list of positive integers,
 or a range of column numbers denoted by square brackets and colons.
 """
 STR__missing_columns_2 = """
-ERROR: Insufficient number of columns specified.
+ERROR: Incorrect number of columns specified.
 Please specify two columns.
 """
 STR__missing_columns_N = """
@@ -526,6 +517,21 @@ Please specify at least two columns.
 STR__column_not_found = """
 ERROR: Column not found: {c} (0-index)
     AT:             Row: {r}
+"""
+
+STR__invalid_operation = """
+ERROR: Invalid operation specified: {s}
+Please specify one of the following:
+    ADD
+    SUM
+    SUBTRACT
+    MULTIPLE
+    PRODUCT
+    DIVIDE
+    AVERAGE
+    CONCATENATE
+    DIFFERENCE
+    GEOMETRIC
 """
 
 STR__invalid_criteria = """
@@ -549,6 +555,10 @@ ERROR: Invalid type action to take: {s}
 Please specify one of:
     col
     val"""
+
+STR__invalid_header_order = """
+ERROR: Invalid header order. Please ensure that REARRANGE is specified last.
+"""
 
 
 
@@ -662,6 +672,10 @@ LIST__geo = ["GEO", "Geo", "geo", "GEOMETRIC", "Geometric", "geometric"]
 
 
 
+LIST__2_col_ops = [OPERATION.SUB, OPERATION.DIV, OPERATION.DIF]
+
+
+
 # Dictionaries #################################################################
 
 DICT__header = DICT__keep_skip_rear
@@ -768,9 +782,106 @@ def Multitool_For_Tables(input_path, input_delim, output_path, output_delim,
             (bool)
             Whether or not to create new headers.
     @header_specs
+            (list<[int, int, int/str]>)
+            A series of lists denoting the header details of a file. Each list
+            contains three things:
+                1)  A pseudo-ENUM int which denotes how the line(s) is/are to be
+                    treated. Options are:
+                        A)  Keep the line(s)
+                        B)  Skip the line(s)
+                        C)  Treat this line as the column headers
+                2)  Either:
+                        A)  An integer denoting a number of lines
+                        B)  A char. This is the char found at the start of each
+                            line
+                        C)  None
+            It is assumed that the [header_specs] specify the "rearrange" option
+            no more than once, and will be specified last, if specified.
     @filters
+            (list<FILTER>)
+                FILTER = [int(ENUM), int, int(ENUM), int(ENUM), int/str]
+            A list of filtering criteria. Each filter consists of the following:
+                - Include/Exclude
+                    (int) - Pseudo ENUM
+                    Whether to include or exclude lines which meet this critera.
+                - Target column
+                    (int)
+                    The column number of the column being targetted.
+                    0-index system.
+                - Criteria
+                    (int) - Pseudo ENUM
+                    What filtering criteria to use.
+                - Comparison type
+                    (int) - Pseudo ENUM
+                    Whether to compare against another column, or against a
+                    static value.
+                - Value OR reference column
+                    (*)
+                    Either an integer denoting the column number of the column
+                    containing the value to be used for the comparison, or the
+                    value itself to be used for the comparison.
+                    0-index system for column numbers.
     @new_column_specs
+            (list<SPEC>)
+            A list of specs. Each SPEC specifies either columns to keep, a
+            completely new column, or a value derived from existing columns.
+            
+            The first value in any SPEC is an ENUM denoting what kind of SPEC it
+            is. Subsequent values depend on the first value.
+            
+                SPEC (keeping existing columns):
+                    - Type
+                    - Column numbers
+                        (list<int>)
+                        A list of column numbers for the columns to be kept.
+                        (0-index)
+                SPEC (creating a new column):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Column header
+                        (str)
+                        The column header of the new column.
+                    - Value
+                        (str)
+                        The contents of the newly created column.
+                SPEC (deriving a new column from the original data):
+                    - Type
+                        (int) - Pseudo ENUM
+                    - Header
+                        (str)
+                        The column header of the new column. An empty string
+                        indicates that a column header should be generated from
+                        the operation and column numbers.
+                    - Operation
+                        (int) - Pseudo ENUM
+                        An ENUM which denotes the operation to use to derive the
+                        contents of the new column. Valid operations include:
+                            1:  Add up two columns
+                            2:  Sum up multiple columns
+                            3:  Subtract the second column from the first one
+                            4:  Multiple two columns
+                            5:  Multiple multiple columns
+                            6:  Divide the first column by the second one
+                            7:  Calculate the average value of multiple columns
+                            8:  Concatenate the text of the two columns
+                            9:  Calculate the difference between two columns
+                            10: Calculate the geometric mean of multiple columns
+                    - Column numbers
+                        (list<int>)
+                        A list of column numbers for the columns to be used for
+                        the operation.
+                        (0-index)
     @unique_cols
+            (list<int>)
+            A list of the columns which will be used to determine the columns,
+            for which a novel combination of values is necessary for that row of
+            data to be accepted.
+            That is to say, if multiple rows have the same combination of values
+            in the specified columns, only the first row will be accepted.
+            This is not the same as specifying that the combination of values in
+            the specified columns needs to be unique across the entire file.
+            Uses the 1-index system. (The first column's index number is 1)
+            0 is used to signify an empty column.
     
     Multitool_For_Tables(str, str, str, str, bool, list<*>, list<*>, list<*>,
             list<int>) -> int
@@ -1629,9 +1740,225 @@ def Parse_Command_Line_Input__Multitool_For_Tables(raw_command_line_input):
     """
     Parse the command line input and call the Multitool_For_Tables function with
     appropriate arguments if the command line input is valid.
-    """    
-    # Safe exit
-    return 0
+    """
+    PRINT.printP(STR__parsing_args)
+    # Remove the runtime environment variable and program name from the inputs
+    inputs = Strip_Non_Inputs(raw_command_line_input, NAME)
+    
+    # No inputs
+    if not inputs:
+        PRINT.printE(STR__no_inputs)
+        PRINT.printE(STR__use_help)
+        return 1
+    
+    # Help option
+    if inputs[0] in LIST__help:
+        print(HELP_DOC)
+        return 0
+    
+    # Initial validation
+    if len(inputs) < 2:
+        PRINT.printE(STR__insufficient_inputs)
+        PRINT.printE(STR__use_help)
+        return 1
+    
+    # Setup mandatory inputs
+    input_path = inputs.pop(0)
+    input_format = inputs.pop(0)
+    
+    # Validate mandatory inputs
+    valid = Validate_Read_Path(input_path)
+    if valid == 1:
+        PRINT.printE(STR__IO_error_read.format(f = input_path))
+        PRINT.printE(STR__use_help)
+        return 1
+    input_delim = Validate_Table_File_Format(input_format)
+    if not input_delim:
+        PRINT.printE(STR__invalid_table_format.format(f = table_format))
+        PRINT.printE(STR__use_help)
+        return 1
+    
+    # Set up rest of the parsing
+    output_path = Generate_Default_Output_File_Path_From_File(input_path,
+            FILEMOD, True)
+    output_delim = input_delim
+    header_specs = []
+    filters = []
+    new_column_specs = []
+    unique_cols = []
+    new_headers = DEFAULT__new_headers
+    
+    # Validate optional inputs (except output path)
+    while inputs:
+        arg = inputs.pop(0)
+        flag = 0
+        try: # Following arguments
+            if arg in ["-a", "-u", "-k"]:
+                arg2 = inputs.pop(0)
+            elif arg in ["-n", "-o"]:
+                arg2 = inputs.pop(0)
+                arg3 = inputs.pop(0)
+            elif arg in ["-c"]:
+                arg2 = inputs.pop(0)
+                arg3 = inputs.pop(0)
+                arg4 = inputs.pop(0)
+            elif arg in ["-f"]:
+                arg2 = inputs.pop(0)
+                arg3 = inputs.pop(0)
+                arg4 = inputs.pop(0)
+                arg5 = inputs.pop(0)
+                arg6 = inputs.pop(0)
+            elif arg in ["-h"]:
+                arg2 = inputs.pop(0)
+                header_treatment = Validate_Header_Treatment(arg2)
+                if header_treatment == KSR.REAR:
+                    pass
+                elif ((header_treatment == KSR.KEEP) or
+                        (header_treatment == KSR.SKIP)):
+                    arg3 = inputs.pop(0)
+                    arg4 = inputs.pop(0)
+                else:
+                    PRINT.printE(STR__invalid_ksr.format(s = arg2))
+                    PRINT.printE(STR__use_help)
+                    return 1
+            else: # Invalid
+                arg = Strip_X(arg)
+                PRINT.printE(STR__invalid_argument.format(s = arg))
+                PRINT.printE(STR__use_help)
+                return 1
+        except:
+            PRINT.printE(STR__insufficient_inputs)
+            PRINT.printE(STR__use_help)
+            return 1
+        if arg == "-a":
+            new_headers = Validate_Bool(arg2)
+            if new_headers == None:
+                PRINT.printE(STR__invalid_bool.format(s = arg2))
+                return 1
+        elif arg == "-u":
+            unique_cols = Validate_List_Of_Ints_Positive(arg2)
+            if not unique_cols:
+                PRINT.printE(STR__invalid_column_nos.format(s = arg2))
+                PRINT.printE(STR__use_help)
+                return 1
+            unique_cols = [i-1 for i in unique_cols]
+        elif arg == "-k":
+            if arg2 in LIST__all:
+                temp = None
+            else:
+                temp = Validate_List_Of_Ints_Positive(arg2, DEFAULT_list_delim)
+                if not temp:
+                    PRINT.printE(STR__invalid_column_nos.format(s = arg2))
+                    PRINT.printE(STR__use_help)
+                    return 1
+                temp = [i+1 for i in temp]
+            new_column_specs.append([COL_TYPE.KEEP, temp])
+        elif arg == "-n":
+            new_column_specs.append([COL_TYPE.NEW, arg2, arg3])
+        elif arg == "-c":
+            header = arg2
+            op = Validate_Criteria(arg3)
+            cols = Validate_List_Of_Ints_Positive(arg4)
+            #
+            if not op: # TODO
+                PRINT.printE(STR__invalid_operation.format(s = arg3))
+                PRINT.printE(STR__use_help)
+                return 1
+            if not cols:
+                PRINT.printE(STR__invalid_column_nos.format(s = arg4))
+                PRINT.printE(STR__use_help)
+                return 1
+            #
+            if op in LIST__2_col_ops:
+                if len(cols) != 2:
+                    PRINT.printE(STR__missing_columns_2)
+                    PRINT.printE(STR__use_help)
+                    return 1
+            else:
+                if len(cols) < 2:
+                    PRINT.printE(STR__missing_columns_N)
+                    PRINT.printE(STR__use_help)
+                    return 1
+            #
+            cols = [i-1 for i in cols]
+            new_column_specs.append([COL_TYPE.CALC, header, op, cols])
+        elif arg == "-o":
+            output_path = arg2
+            output_delim = Validate_Table_File_Format(arg3)
+            if not input_delim:
+                PRINT.printE(STR__invalid_table_format.format(f = table_format))
+                PRINT.printE(STR__use_help)
+                return 1
+        elif arg == "-f":
+            col_filter = Validate_Filter(arg2, arg3, arg4, arg5, arg6)
+            if len(col_filter) == 5: # Invalid
+                inc_exc, col_no_1, criteria, f_type, col_no_2 = error_codes
+                if inc_exc:
+                    PRINT.printE(STR__invalid_inc_exc.format(s = arg2))
+                if col_no_1:
+                    PRINT.printE(STR__invalid_column_no.format(s = arg3))
+                if criteria:
+                    PRINT.printE(STR__invalid_criteria.format(s = arg4))
+                if f_type:
+                    PRINT.printE(STR__invalid_criteria_type.format(s = arg5))
+                if col_no_2:
+                    PRINT.printE(STR__invalid_column_no.format(s = arg6))
+                PRINT.printE(STR__use_help)
+                return 1
+            else:
+                filters.append(col_filter)
+        else: # arg == "-h"
+            if header_treatment == KSR.REAR:
+                header_specs.append([header_treatment, None])
+            else:
+                if arg3 in LIST__num:
+                    temp = arg4
+                elif arg3 in LIST__char:
+                    temp = Validate_Int_Positive(arg4)
+                    if temp == -1:
+                        PRINT.printE(STR__invalid_column_no.format(s = arg4))
+                        PRINT.printE(STR__use_help)
+                        return 1
+                    temp = temp - 1
+                else:
+                    PRINT.printE(STR__invalid_N_C.format(s = arg3))
+                    PRINT.printE(STR__use_help)
+                    return 1
+                header_specs.append([header_treatment, temp])
+    
+    # Validate header order
+    valid_header = Validate_Header_Order(header_specs)
+    if not valid_header:
+        PRINT.printE(STR__invalid_header_order)
+        PRINT.printE(STR__use_help)
+        return 1
+    
+    # Resolve "ALL" now that headers have been validated
+    for new_column_spec in new_column_specs:
+        if new_column_spec[0] == COL_TYPE.KEEP:
+            if new_column_spec[1] == None:
+                no_cols = Get_No_Columns(input_path, input_delim, header_specs)
+                col_nos = range(no_cols)
+                new_column_spec[1] = col_nos
+    
+    # Validate output paths
+    valid_out = Validate_Write_Path(output_path)
+    if valid_out == 2: return 0
+    if valid_out == 3:
+        PRINT.printE(STR__IO_error_write_forbid)
+        return 1
+    if valid_out == 4:
+        PRINT.printE(STR__IO_error_write_unable)
+        return 1
+    
+    # Run program
+    exit_state = Multitool_For_Tables(
+        input_path, input_delim, output_path, output_delim, new_headers,
+        header_specs, filters, new_column_specs, unique_cols)
+    
+    # Exit
+    if exit_state == 0: return 0
+    else: return 1
 
 
 
@@ -1803,8 +2130,8 @@ def Validate_Filter(inc_exc, col_no, criteria, filter_type, col_no__value):
     With error codes, a 0 indicates no error for the corresponding string, while
     a 1 indicates that the string was invalid.
     
-    Validate_Write_Path(str, str, str, str, str) -> [int, int, int, int]
-    Validate_Write_Path(str, str, str, str, str) -> [int, int, int, str]
+    Validate_Filter(str, str, str, str, str) -> [int, int, int, int/str]
+    Validate_Filter(str, str, str, str, str) -> [int, int, int, int, int]
     """
     # Setup
     errors = []
