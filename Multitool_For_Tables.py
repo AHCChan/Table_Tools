@@ -438,7 +438,7 @@ DEFAULT_list_delim = "_"
 import sys
 
 import _Controlled_Print as PRINT
-from _Command_Line_Parser import * # 2.6
+from _Command_Line_Parser import * # 2.7
 
 from Table_File_Reader import * # 2.0
 
@@ -449,11 +449,6 @@ from Table_File_Reader import * # 2.0
 class HEADER_TYPE:
     CHAR=1
     NUM=2
-
-class KSR:
-    KEEP=1
-    SKIP=2
-    REAR=3
 
 
 
@@ -475,11 +470,21 @@ class CRITERIA:
 
 class FILTER_TYPE:
     COL=1
-    VAl=2
+    VAL=2
 
 
 
-class 
+class OPERATION:
+    ADD=1
+    SUM=2
+    SUB=3
+    MUL=4
+    PRO=5
+    DIV=6
+    AVG=7
+    CAT=8
+    DIF=9
+    GEO=10
 
 
 
@@ -754,7 +759,7 @@ PRINT.PRINT_METRICS = PRINT_METRICS
 
 # Table Processing Functions ###################################################
 
-def Multitool_For_Tables(input_path, input_delim, output_path, output_delim,
+def Multitool_For_Tables(path_in, delim_in, path_out, delim_out,
         new_headers, header_specs, filters, new_column_specs, unique_cols):
     """
     Parse a table file. Possible functionality includes:
@@ -905,16 +910,15 @@ def Multitool_For_Tables(input_path, input_delim, output_path, output_delim,
     f = Table_Reader()
     f.Set_New_Path(path_in)
     f.Set_Delimiter(delim_in)
-    if header_specs:
-        f.Set_Adv_Header_Params([header_specs])
+    f.Set_Adv_Header_Params(header_specs)
     f.Open()
     o = open(path_out, "w")
     
     # Header
     header_out_str, new_col_headers = f.Adv_Process_Header_Text()
     o.write(header_out_str)
-    if new_headers_b or new_col_headers:
-        new_col_headers = Generate_Headers(og_col_headers, new_column_specs)
+    if new_headers or new_col_headers:
+        new_col_headers = Generate_Headers(new_col_headers, new_column_specs)
         string = delim_out.join(new_col_headers) + "\n"
         o.write(string)
     
@@ -924,11 +928,11 @@ def Multitool_For_Tables(input_path, input_delim, output_path, output_delim,
         f.Read()
         values = f.current_element
         # Filter and unique
-        filter_pass = Filter_Line(data, filters, filter_metrics)
+        filter_pass = Filter_Line(values, filters, filter_metrics)
         if filter_pass:
             flag = True
             if unique_cols:
-                new_key = Generate_Key(values, key_cols)
+                new_key = Generate_Key(values, unique_cols)
                 if new_key in unique_keys:
                     flag = False
                     repeats_elim += 1
@@ -936,8 +940,9 @@ def Multitool_For_Tables(input_path, input_delim, output_path, output_delim,
                     unique_keys.add(new_key)
             if flag:
                 rows_out += 1
-                new_line = Construct_Line(values, delim, specs, col_metrics)
-                o.write(new_line)
+                new_line = Construct_Line(values, delim_out, new_column_specs,
+                        col_metrics)
+                o.write(new_line + "\n")
     
     # Finish
     f.Close()
@@ -1046,7 +1051,7 @@ def Generate_Headers(old_headers, new_column_specs):
     # Loop
     for spec in new_column_specs:
         if spec[0] == COL_TYPE.KEEP:
-            col_nos = specs[1]
+            col_nos = spec[1]
             for col_no in col_nos:
                 if old_headers:
                     name = old_headers[col_no]
@@ -1189,7 +1194,7 @@ def Filter_Line(data, filters, filter_metrics=None):
             The row of data being filtered.
     @filters
             (list<FILTER>)
-                FILTER = [int(ENUM), int, int(ENUM), int(ENUM), int/str]
+                FILTER = [int(ENUM), int, int(ENUM), int/str]
             A list of filtering criteria. Each filter consists of the following:
                 - Include/Exclude
                     (int) - Pseudo ENUM
@@ -1201,10 +1206,6 @@ def Filter_Line(data, filters, filter_metrics=None):
                 - Criteria
                     (int) - Pseudo ENUM
                     What filtering criteria to use.
-                - Comparison type
-                    (int) - Pseudo ENUM
-                    Whether to compare against another column, or against a
-                    static value.
                 - Value OR reference column
                     (*)
                     Either an integer denoting the column number of the column
@@ -1216,8 +1217,8 @@ def Filter_Line(data, filters, filter_metrics=None):
             A list of counts for the number of lines (so far) which have met the
             corresponding criteria.
     
-    Filter_Line(list<str>, list<list<>(5)>, list<int>) -> bool
-    Filter_Line(list<str>, list<list<>(5)>, list<int>) -> None
+    Filter_Line(list<str>, list<list<>(4)>, list<int>) -> bool
+    Filter_Line(list<str>, list<list<>(4)>, list<int>) -> None
     """
     # Setup
     all_inc = True
@@ -1225,12 +1226,12 @@ def Filter_Line(data, filters, filter_metrics=None):
     index = 0
     # Main loop
     for filt in filters:
-        inc_exc, target, criteria, comp_type, val_ref = filt
+        inc_exc, target, criteria, val_ref = filt
         # Get values
         val_1 = data[target]
-        if comp_type == FILTER_TYPE.COL:
+        if type(val_ref) == int:
             val_2 = data[val_ref]
-        elif comp_type == FILTER_TYPE.VAL:
+        elif type(val_ref) == str:
             val_2 = val_ref
         else: # Shouldn't happen
             return None
@@ -1528,6 +1529,18 @@ def Report_Metrics(rows_in, cols_in, rows_out, cols_out, repeats_elim,
     
     Report_Metrics(int, int, list<int>) -> None
     """
+    # Averages
+    divisor = float(rows_out)
+    range_f = range(len(filter_metrics))
+    range_c = range(len(col_metrics))
+    for i in range_f:
+        x = filter_metrics[i]
+        avg = x/divisor
+        filter_metrics[i] = avg
+    for i in range_c:
+        x = col_metrics[i]
+        avg = x/divisor
+        col_metrics[i] = avg
     # Preparing for splitting
     col_metrics_len = len(col_metrics)
     filter_metrics_ = []
@@ -1621,7 +1634,7 @@ def Get_Column_Headers(filepath, delim, header_specs):
             It is assumed that the [header_specs] specify the "rearrange" option
             no more than once, and will be specified last, if specified.
     
-    Get_No_Columns(str, str, list<[int, int, int/str]>) -> list<str>
+    Get_Column_Headers(str, str, list<[int, int, int/str]>) -> list<str>
     """# Open
     f = open(filepath, "U")
     line = f.readline()
@@ -1696,7 +1709,6 @@ def Get_No_Columns(filepath, delim, header_specs):
     
     # Setup
     empty_flag = False
-    
     # Headers
     for header_list in header_specs:
         action, value = header_list
@@ -1711,12 +1723,13 @@ def Get_No_Columns(filepath, delim, header_specs):
                 if value < 0:
                     return -1
                 while value > 0:
+                    value -= 1
                     line = f.readline()
             elif type(value) == str:
                 read_flag = True
                 while read_flag:
-                    if line.startswith(value):
-                        line.readline()
+                    if line and line.startswith(value):
+                        line = f.readline()
                     else:
                         read_flag = False
             else:
@@ -1730,7 +1743,7 @@ def Get_No_Columns(filepath, delim, header_specs):
         return 0
     delim_count = line.count(delim)
     col_count = delim_count + 1
-    return value_count
+    return col_count
 
 
 
@@ -1757,7 +1770,7 @@ def Parse_Command_Line_Input__Multitool_For_Tables(raw_command_line_input):
         return 0
     
     # Initial validation
-    if len(inputs) < 2:
+    if len(inputs) < 3:
         PRINT.printE(STR__insufficient_inputs)
         PRINT.printE(STR__use_help)
         return 1
@@ -1827,7 +1840,7 @@ def Parse_Command_Line_Input__Multitool_For_Tables(raw_command_line_input):
                 PRINT.printE(STR__use_help)
                 return 1
         except:
-            PRINT.printE(STR__insufficient_inputs)
+            PRINT.printE(STR__insufficient_inputs_arg.format(s = arg))
             PRINT.printE(STR__use_help)
             return 1
         if arg == "-a":
@@ -1836,7 +1849,8 @@ def Parse_Command_Line_Input__Multitool_For_Tables(raw_command_line_input):
                 PRINT.printE(STR__invalid_bool.format(s = arg2))
                 return 1
         elif arg == "-u":
-            unique_cols = Validate_List_Of_Ints_Positive(arg2)
+            unique_cols = Validate_List_Of_Ints_Positive(arg2,
+                    DEFAULT_list_delim)
             if not unique_cols:
                 PRINT.printE(STR__invalid_column_nos.format(s = arg2))
                 PRINT.printE(STR__use_help)
@@ -1851,14 +1865,14 @@ def Parse_Command_Line_Input__Multitool_For_Tables(raw_command_line_input):
                     PRINT.printE(STR__invalid_column_nos.format(s = arg2))
                     PRINT.printE(STR__use_help)
                     return 1
-                temp = [i+1 for i in temp]
+                temp = [i-1 for i in temp]
             new_column_specs.append([COL_TYPE.KEEP, temp])
         elif arg == "-n":
             new_column_specs.append([COL_TYPE.NEW, arg2, arg3])
         elif arg == "-c":
             header = arg2
-            op = Validate_Criteria(arg3)
-            cols = Validate_List_Of_Ints_Positive(arg4)
+            op = Validate_Operation(arg3)
+            cols = Validate_List_Of_Ints_Positive(arg4, DEFAULT_list_delim)
             #
             if not op: # TODO
                 PRINT.printE(STR__invalid_operation.format(s = arg3))
@@ -1892,7 +1906,7 @@ def Parse_Command_Line_Input__Multitool_For_Tables(raw_command_line_input):
         elif arg == "-f":
             col_filter = Validate_Filter(arg2, arg3, arg4, arg5, arg6)
             if len(col_filter) == 5: # Invalid
-                inc_exc, col_no_1, criteria, f_type, col_no_2 = error_codes
+                inc_exc, col_no_1, criteria, f_type, col_no_2 = col_filter
                 if inc_exc:
                     PRINT.printE(STR__invalid_inc_exc.format(s = arg2))
                 if col_no_1:
@@ -1911,15 +1925,14 @@ def Parse_Command_Line_Input__Multitool_For_Tables(raw_command_line_input):
             if header_treatment == KSR.REAR:
                 header_specs.append([header_treatment, None])
             else:
-                if arg3 in LIST__num:
+                if arg3 in LIST__char:
                     temp = arg4
-                elif arg3 in LIST__char:
+                elif arg3 in LIST__num:
                     temp = Validate_Int_Positive(arg4)
                     if temp == -1:
                         PRINT.printE(STR__invalid_column_no.format(s = arg4))
                         PRINT.printE(STR__use_help)
                         return 1
-                    temp = temp - 1
                 else:
                     PRINT.printE(STR__invalid_N_C.format(s = arg3))
                     PRINT.printE(STR__use_help)
@@ -1989,8 +2002,8 @@ def Validate_Header_Treatment(header_treatment):
     
     Validate_Header_Treatment(str) -> int
     """
-    if header_treatment in LIST__skip: return KSR.KEEP
-    if header_treatment in LIST__keep: return KSR.SKIP
+    if header_treatment in LIST__keep: return KSR.KEEP
+    if header_treatment in LIST__skip: return KSR.SKIP
     if header_treatment in LIST__rear: return KSR.REAR
     return 0
 
@@ -2168,7 +2181,6 @@ def Validate_Filter(inc_exc, col_no, criteria, filter_type, col_no__value):
         error = True
     else:
         errors.append(0)
-        results.append(filter_type)
     # Validate col_no|value
     if filter_type == FILTER_TYPE.COL:
         col_no__value = Validate_Int_Positive(col_no__value)
@@ -2179,6 +2191,7 @@ def Validate_Filter(inc_exc, col_no, criteria, filter_type, col_no__value):
             errors.append(0)
             results.append(col_no__value-1)
     elif filter_type == FILTER_TYPE.VAL:
+        errors.append(0)
         results.append(col_no__value)
     else:
         errors.append(0)
