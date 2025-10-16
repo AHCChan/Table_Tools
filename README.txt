@@ -20,14 +20,14 @@ clone" operation is all which is required for installation.
 
 Tools:
     (3.0.2) Join.py
-    (1.0)   Multitool_For_Tables.py
+    (1.1)   Multitool_For_Tables.py
     (3.1.1) Tally_Column.py
 
 Supporting Modules:
     (1.0)   _Controlled_Print.py
-    (2.2)   _Command_Line_Parser.py
+    (2.7)   _Command_Line_Parser.py
     (1.1)   File_Reader.py
-    (1.2)   Table_File_Reader.py
+    (2.1)   Table_File_Reader.py
 
 Deprecated:
     (1.0.1) Add_Column.py
