@@ -1,6 +1,6 @@
 HELP_DOC = """
 MULTITOOL FOR TABLES
-(version 1.0)
+(version 1.1)
 by Angelo Chan
 
 This is a multi-purpose tool for parsing table files. It combines the
@@ -64,6 +64,8 @@ Valid column operations include:
     - CONCATENATE   (2 columns)
     - DIFFERENCE    (2 columns)
     - GEOMETRIC AVG (N columns)
+    - INTEGER AVG   (N columns)
+    - GEO INT AVG   (N columns)
 
 
 
@@ -271,6 +273,11 @@ OPTIONAL:
             con{CAT}enate - Concatenate the text of the two columns
             {DIF}ference  - Calculate the difference between two columns
             {GEO}metric   - Calculate the geometric mean of multiple columns
+            {INT}eger     - Calculate the average value of multiple columns,
+                            rounded to the nearest integer.
+            {G}eo_{IN}t   - Calculate the geometric mean of multiple columns,
+                            rounded to the nearest integer.
+
 
 
 
@@ -485,6 +492,8 @@ class OPERATION:
     CAT=8
     DIF=9
     GEO=10
+    AVG_INT=11
+    GEO_INT=12
 
 
 
@@ -537,6 +546,8 @@ Please specify one of the following:
     CONCATENATE
     DIFFERENCE
     GEOMETRIC
+    INTEGER
+    GEO_INT
 """
 
 STR__invalid_criteria = """
@@ -674,6 +685,10 @@ LIST__avg = ["AVG", "Avg", "avg", "AVERAGE", "Average", "average", "MEAN",
 LIST__cat = ["CAT", "Cat" ,"cat", "CONCATENATE", "Concatenate", "concatenate"]
 LIST__dif = ["DIF", "Dif", "dif", "DIFFERENCE", "Difference", "difference"]
 LIST__geo = ["GEO", "Geo", "geo", "GEOMETRIC", "Geometric", "geometric"]
+LIST__avg_int = ["INT", "Int", "int", "INTEGER", "Integer", "integer"]
+LIST__geo_int = ["GIN", "Gin", "gin", "GINT", "Gint", "gint", "GEO_INT",
+        "Geo_Int", "geo_int", "GEO_I", "Geo_I", "geo_i", "INT_GEO", "Int_Geo",
+        "int_geo", "I_GEO", "I_Geo", "i_geo"]
 
 
 
@@ -733,6 +748,10 @@ for i in LIST__avg: DICT__operation[i] = OPERATION.AVG
 for i in LIST__cat: DICT__operation[i] = OPERATION.CAT
 for i in LIST__dif: DICT__operation[i] = OPERATION.DIF
 for i in LIST__geo: DICT__operation[i] = OPERATION.GEO
+for i in LIST__avg_int: DICT__operation[i] = OPERATION.AVG_INT
+for i in LIST__geo_int: DICT__operation[i] = OPERATION.GEO_INT
+
+
 
 DICT__operation_str = {
     OPERATION.ADD: "Add",
@@ -744,7 +763,9 @@ DICT__operation_str = {
     OPERATION.AVG: "Mean",
     OPERATION.CAT: "Concatenate",
     OPERATION.DIF: "Difference",
-    OPERATION.GEO: "Geometric_Mean"
+    OPERATION.GEO: "Geometric_Mean",
+    OPERATION.AVG_INT: "Integer_Mean",
+    OPERATION.GEO_INT: "Integer_Geometric_Mean"
     }
 
 
@@ -1482,6 +1503,28 @@ def Construct_Line(values, delim, specs, new_col_metrics=None):
                         temp = temp * num
                     root = 1.0/(len(nums))
                     temp = temp ** root
+                elif op == OPERATION.AVG_INT:
+                    temp = 1.0
+                    for num in nums:
+                        temp = temp * num
+                    length = len(nums)
+                    temp = temp/length
+                    if temp > 0:
+                        temp += 0.5
+                    elif temp < 0:
+                        temp -= 0.5
+                    temp = int(temp)
+                elif op == OPERATION.GEO_INT:
+                    temp = 1.0
+                    for num in nums:
+                        temp = temp * num
+                    root = 1.0/(len(nums))
+                    temp = temp ** root
+                    if temp > 0:
+                        temp += 0.5
+                    elif temp < 0:
+                        temp -= 0.5
+                    temp = int(temp)
                 else:
                     return None
                 # Process
@@ -2258,6 +2301,8 @@ def Validate_Operation(string):
     if string in LIST__cat: return OPERATION.CAT
     if string in LIST__dif: return OPERATION.DIF
     if string in LIST__geo: return OPERATION.GEO
+    if string in LIST__avg_int: return OPERATION.AVG_INT
+    if string in LIST__geo_int: return OPERATION.GEO_INT
     return 0
 
 
